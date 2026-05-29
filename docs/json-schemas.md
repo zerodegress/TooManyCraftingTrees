@@ -6,13 +6,15 @@ TMCT currently writes three kinds of JSON documents:
 
 1. JEI recipe scans from `/tmct dump-recipes`
 2. Crafting trees from `/tmct tree`
-3. Local recipe libraries in `config/too_many_crafting_trees/recipe_libraries.json`
+3. Simplified crafting trees from `/tmct simpletree`
+4. Local recipe libraries in `config/too_many_crafting_trees/recipe_libraries.json`
 
 The canonical schemas are:
 
 - `schemas/common.schema.json`
 - `schemas/jei-recipe-scan.schema.json`
 - `schemas/crafting-tree.schema.json`
+- `schemas/simpletree.schema.json`
 - `schemas/recipe-libraries.schema.json`
 
 `common.schema.json` contains shared building blocks used by the other schemas.
@@ -369,6 +371,95 @@ Example:
 }
 ```
 
+## Simple Tree
+
+Schema:
+
+- `schemas/simpletree.schema.json`
+
+This is the simplified export written by `/tmct simpletree`.
+
+Top-level fields:
+
+- `generatedAt`: ISO-8601 timestamp
+- `includeHidden`: whether hidden JEI recipes were available during generation
+- `maxDepth`: recursion depth limit used for this export
+- `brief`: a compact summary of the whole crafting plan
+- `tree`: the recursive detailed flow
+
+### `brief`
+
+`brief` summarizes the whole plan.
+
+Fields:
+
+- `recipeType`: selected root recipe type when available
+- `output`: requested final output
+- `byproducts`: total byproducts produced by the full plan
+- `inputs`: total base inputs consumed by the full plan
+
+### `tree`
+
+`tree` is a recursive node structure. Each node is either a recipe step or a raw material leaf.
+
+Fields:
+
+- `type`: `recipe` or `raw`
+- `recipe` nodes contain `recipeId`, `recipeType`, `crafts`, `output`, `byproducts`, and `inputs`
+- `raw` nodes contain only `type` and `output`
+- `output`: requested output at this node
+
+Notes:
+
+- `simpletree` may use a recipe library during calculation, but the exported JSON does not record which library was used
+- If a node cannot be expanded further, it is emitted as `type: "raw"`
+- `brief.byproducts` is a full-plan total
+- `tree.byproducts` is node-local
+
+Example:
+
+```json
+{
+  "generatedAt": "2026-05-29T09:00:00Z",
+  "includeHidden": false,
+  "maxDepth": 16,
+  "brief": {
+    "recipeType": "minecraft:crafting",
+    "output": {
+      "item": "minecraft:chest",
+      "count": 1
+    },
+    "byproducts": [],
+    "inputs": [
+      {
+        "item": "minecraft:oak_planks",
+        "count": 8
+      }
+    ]
+  },
+  "tree": {
+    "type": "recipe",
+    "recipeId": "minecraft:chest",
+    "recipeType": "minecraft:crafting",
+    "crafts": 1,
+    "output": {
+      "item": "minecraft:chest",
+      "count": 1
+    },
+    "byproducts": [],
+    "inputs": [
+      {
+        "type": "raw",
+        "output": {
+          "item": "minecraft:oak_planks",
+          "count": 8
+        }
+      }
+    ]
+  }
+}
+```
+
 ## Simple End-to-End Examples
 
 ### Example 1: Scan recipes and inspect schema
@@ -415,3 +506,17 @@ Expected result:
 
 - The tree export records `"recipeLibrary": "my_pack"`
 - Any node for `minecraft:stick` will use the library-selected recipe if present
+
+### Example 4: Export a simplified tree
+
+Commands:
+
+```text
+/tmct simpletree minecraft:chest 1
+```
+
+Expected result:
+
+- Produces `tmct_exports/simple-tree-*.json`
+- The `brief` section summarizes total inputs and byproducts
+- The `tree` section keeps the recursive structure but drops candidate and status detail

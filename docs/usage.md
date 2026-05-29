@@ -13,6 +13,7 @@ The supported JSON formats are documented in:
 
 - `schemas/jei-recipe-scan.schema.json`
 - `schemas/crafting-tree.schema.json`
+- `schemas/simpletree.schema.json`
 - `schemas/recipe-libraries.schema.json`
 
 ## Command Summary
@@ -90,6 +91,50 @@ Examples:
 /tmct tree minecraft:chest 1 true
 /tmct tree minecraft:chest 1 default
 /tmct tree minecraft:chest 1 true 16 default
+```
+
+### `/tmct simpletree`
+
+Export a simplified crafting tree for a target item and amount.
+
+`simpletree` uses the same recipe-selection logic as `/tmct tree`, but the JSON is reduced to:
+
+- `brief`: overall effect of the full crafting plan
+- `tree`: recursive step-by-step crafting structure
+
+The command can use a recipe library for disambiguation, but the exported JSON does not include library-specific fields.
+Raw material nodes in `tree` are emitted in a minimal form with only `type` and `output`.
+
+Syntax:
+
+```text
+/tmct simpletree <item> <count>
+/tmct simpletree <item> <count> <library>
+/tmct simpletree <item> <count> <includeHidden>
+/tmct simpletree <item> <count> <includeHidden> <library>
+/tmct simpletree <item> <count> <includeHidden> <maxDepth>
+/tmct simpletree <item> <count> <includeHidden> <maxDepth> <library>
+```
+
+Arguments:
+
+- `item`: a valid item argument
+- `count`: requested output amount, at least `1`
+- `includeHidden`: `true` or `false`
+- `maxDepth`: recursion depth limit, from `1` to `64`
+- `library`: a recipe library name created with `/tmct library create`
+
+Output:
+
+- A JSON file named like `simple-tree-minecraft_chest-20260529-154000.json`
+- Schema: `schemas/simpletree.schema.json`
+
+Examples:
+
+```text
+/tmct simpletree minecraft:chest 1
+/tmct simpletree minecraft:chest 1 default
+/tmct simpletree minecraft:chest 1 true 16 default
 ```
 
 ### `/tmct library list`
@@ -239,6 +284,17 @@ This works best when every intermediate output has only one candidate recipe.
 ```
 
 This is the intended workflow when some items can be crafted in multiple ways.
+
+### Workflow 4: Export a simplified tree for downstream tools
+
+```text
+/tmct library create pack_b
+/tmct library candidates minecraft:stick
+/tmct library set pack_b minecraft:stick minecraft:stick
+/tmct simpletree minecraft:ladder 3 pack_b
+```
+
+Use this when you want a smaller JSON shape than the full `/tmct tree` export.
 
 ## Important Notes
 

@@ -15,6 +15,7 @@ import com.zerodegress.tmct.jei.JeiRecipeScanner.IngredientData;
 import com.zerodegress.tmct.jei.JeiRecipeScanner.RecipeData;
 import com.zerodegress.tmct.jei.JeiRecipeScanner.RecipeScan;
 import com.zerodegress.tmct.tree.CraftingTreeCalculator;
+import com.zerodegress.tmct.tree.SimpleTreeCalculator;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -90,6 +91,40 @@ public final class TmctClientCommands {
                             ))
                             .then(Commands.argument("library", StringArgumentType.word())
                                 .executes(context -> exportTree(
+                                    context,
+                                    BoolArgumentType.getBool(context, "includeHidden"),
+                                    IntegerArgumentType.getInteger(context, "maxDepth"),
+                                    StringArgumentType.getString(context, "library")
+                                ))))))));
+
+        root.then(Commands.literal("simpletree")
+            .then(Commands.argument("item", ItemArgument.item(event.getBuildContext()))
+                .then(Commands.argument("count", LongArgumentType.longArg(1))
+                    .executes(context -> exportSimpleTree(context, false, 16))
+                    .then(Commands.argument("library", StringArgumentType.word())
+                        .executes(context -> exportSimpleTree(
+                            context,
+                            false,
+                            16,
+                            StringArgumentType.getString(context, "library")
+                        )))
+                    .then(Commands.argument("includeHidden", BoolArgumentType.bool())
+                        .executes(context -> exportSimpleTree(context, BoolArgumentType.getBool(context, "includeHidden"), 16))
+                        .then(Commands.argument("library", StringArgumentType.word())
+                            .executes(context -> exportSimpleTree(
+                                context,
+                                BoolArgumentType.getBool(context, "includeHidden"),
+                                16,
+                                StringArgumentType.getString(context, "library")
+                            )))
+                        .then(Commands.argument("maxDepth", IntegerArgumentType.integer(1, 64))
+                            .executes(context -> exportSimpleTree(
+                                context,
+                                BoolArgumentType.getBool(context, "includeHidden"),
+                                IntegerArgumentType.getInteger(context, "maxDepth")
+                            ))
+                            .then(Commands.argument("library", StringArgumentType.word())
+                                .executes(context -> exportSimpleTree(
                                     context,
                                     BoolArgumentType.getBool(context, "includeHidden"),
                                     IntegerArgumentType.getInteger(context, "maxDepth"),
@@ -178,6 +213,45 @@ public final class TmctClientCommands {
         } catch (Exception exception) {
             TooManyCraftingTrees.LOGGER.error("Failed to export crafting tree", exception);
             source.sendFailure(Component.literal("Failed to export crafting tree: " + exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int exportSimpleTree(CommandContext<CommandSourceStack> context, boolean includeHidden, int maxDepth) {
+        return exportSimpleTree(context, includeHidden, maxDepth, null);
+    }
+
+    private static int exportSimpleTree(CommandContext<CommandSourceStack> context, boolean includeHidden, int maxDepth, String libraryName) {
+        CommandSourceStack source = context.getSource();
+        try {
+            ItemInput itemInput = ItemArgument.getItem(context, "item");
+            long requestedAmount = LongArgumentType.getLong(context, "count");
+            ItemStack targetStack = itemInput.createItemStack(1);
+
+            RecipeScan scan = JeiRecipeScanner.scanAll(source.registryAccess(), includeHidden);
+            IngredientData target = JeiRecipeScanner.describeItemStack(source.registryAccess(), targetStack);
+            String selectedLibrary = libraryName == null ? null : requireLibrary(source, libraryName);
+            var result = SimpleTreeCalculator.calculate(
+                scan,
+                target,
+                requestedAmount,
+                maxDepth,
+                ingredientKey -> selectedRecipeFromLibrary(selectedLibrary, ingredientKey)
+            );
+
+            String targetName = target.identifier == null ? "target" : target.identifier;
+            Path file = writeJson("simple-tree-" + safeFileName(targetName) + "-" + timestamp() + ".json", result);
+            String librarySuffix = selectedLibrary == null ? "" : " using library " + selectedLibrary;
+            source.sendSuccess(
+                () -> Component.literal(
+                    "Exported simple tree for " + targetName + " x" + requestedAmount + librarySuffix + " to " + file.toAbsolutePath()
+                ),
+                false
+            );
+            return 1;
+        } catch (Exception exception) {
+            TooManyCraftingTrees.LOGGER.error("Failed to export simple tree", exception);
+            source.sendFailure(Component.literal("Failed to export simple tree: " + exception.getMessage()));
             return 0;
         }
     }
