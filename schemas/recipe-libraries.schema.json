@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/recipe-libraries.schema.json",
+  "title": "TMCT Recipe Libraries",
+  "description": "Schema for config/too_many_crafting_trees/recipe_libraries.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "updatedAt": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "libraries": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/recipeLibrary"
+      }
+    }
+  },
+  "required": [
+    "updatedAt",
+    "libraries"
+  ],
+  "$defs": {
+    "recipeLibrary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "updatedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "selectedRecipes": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "name",
+        "updatedAt",
+        "selectedRecipes"
+      ]
+    }
+  }
+}

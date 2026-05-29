@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/common.schema.json",
+  "title": "TMCT Common JSON Types",
+  "$defs": {
+    "jsonValue": {
+      "description": "Any valid JSON value.",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ingredientKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "typeUid": {
+          "type": "string"
+        },
+        "uid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "typeUid",
+        "uid"
+      ]
+    },
+    "ingredientData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "typeUid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "identifier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "displayName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ingredientClass": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "amount": {
+          "type": "integer"
+        },
+        "countable": {
+          "type": "boolean"
+        },
+        "item": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fluid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "key": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ingredientKey"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "serialized": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/jsonValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "serializationError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "typeUid",
+        "uid",
+        "identifier",
+        "displayName",
+        "ingredientClass",
+        "amount",
+        "countable",
+        "item",
+        "fluid",
+        "key",
+        "serialized",
+        "serializationError"
+      ]
+    },
+    "recipeSlotData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "slotName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "displayed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ingredientData"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ingredients": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ingredientData"
+          }
+        }
+      },
+      "required": [
+        "role",
+        "slotName",
+        "source",
+        "displayed",
+        "ingredients"
+      ]
+    },
+    "recipeData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recipeId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recipeType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recipeClass": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recipeObjectClass": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "categoryTitle": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "categoryClass": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "categoryWidth": {
+          "type": "integer"
+        },
+        "categoryHeight": {
+          "type": "integer"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ingredientData"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ingredientData"
+          }
+        },
+        "craftingStations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ingredientData"
+          }
+        },
+        "renderOnly": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ingredientData"
+          }
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/recipeSlotData"
+          }
+        },
+        "extra": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sortKey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "recipeId",
+        "recipeType",
+        "recipeClass",
+        "recipeObjectClass",
+        "categoryTitle",
+        "categoryClass",
+        "categoryWidth",
+        "categoryHeight",
+        "inputs",
+        "outputs",
+        "craftingStations",
+        "renderOnly",
+        "slots",
+        "extra",
+        "errors",
+        "sortKey"
+      ]
+    }
+  }
+}
