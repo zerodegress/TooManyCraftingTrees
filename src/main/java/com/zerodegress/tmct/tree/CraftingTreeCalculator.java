@@ -21,17 +21,29 @@ public final class CraftingTreeCalculator {
     }
 
     public static CraftingTreeResult calculate(RecipeScan scan, IngredientData target, long requestedAmount, int maxDepth) {
+        return calculate(scan, target, requestedAmount, maxDepth, ingredientKey -> Optional.empty(), null);
+    }
+
+    public static CraftingTreeResult calculate(
+        RecipeScan scan,
+        IngredientData target,
+        long requestedAmount,
+        int maxDepth,
+        RecipeSelector recipeSelector,
+        String recipeLibrary
+    ) {
         if (target.key == null) {
             throw new IllegalArgumentException("Target ingredient has no stable JEI key.");
         }
 
         RecipeIndex index = RecipeIndex.create(scan);
         CalculationState state = new CalculationState();
-        CraftingTreeNode root = buildNode(index, state, target, requestedAmount, 0, maxDepth, new LinkedHashSet<>());
+        CraftingTreeNode root = buildNode(index, state, target, requestedAmount, 0, maxDepth, new LinkedHashSet<>(), recipeSelector);
 
         CraftingTreeResult result = new CraftingTreeResult();
         result.generatedAt = Instant.now().toString();
         result.includeHidden = scan.includeHidden;
+        result.recipeLibrary = recipeLibrary;
         result.maxDepth = maxDepth;
         result.scannedRecipeCount = scan.recipeCount;
         result.target = target.withAmount(requestedAmount);
@@ -50,7 +62,8 @@ public final class CraftingTreeCalculator {
         long requestedAmount,
         int depth,
         int maxDepth,
-        Set<IngredientKey> path
+        Set<IngredientKey> path,
+        RecipeSelector recipeSelector
     ) {
         CraftingTreeNode node = new CraftingTreeNode();
         node.ingredient = ingredient.withAmount(requestedAmount);
@@ -85,7 +98,36 @@ public final class CraftingTreeCalculator {
             return node;
         }
 
-        RecipeData recipe = candidates.getFirst();
+        RecipeData recipe;
+        String preferredRecipeId = recipeSelector.selectedRecipeId(ingredient.key).orElse(null);
+        if (preferredRecipeId != null) {
+            Optional<RecipeData> selectedRecipe = candidates.stream()
+                .filter(candidate -> preferredRecipeId.equals(candidate.displayId()))
+                .findFirst();
+            if (selectedRecipe.isEmpty()) {
+                node.status = "missing_library_recipe";
+                state.unresolved.add(UnresolvedIngredient.of(
+                    ingredient,
+                    requestedAmount,
+                    "recipe library selected unavailable recipe " + preferredRecipeId
+                ));
+                return node;
+            }
+            recipe = selectedRecipe.get();
+            node.selectedRecipeSource = "library";
+        } else if (candidates.size() == 1) {
+            recipe = candidates.getFirst();
+            node.selectedRecipeSource = "only_candidate";
+        } else {
+            node.status = "ambiguous";
+            state.unresolved.add(UnresolvedIngredient.of(
+                ingredient,
+                requestedAmount,
+                "multiple candidate recipes require an explicit recipe library selection"
+            ));
+            return node;
+        }
+
         long outputPerCraft = recipe.outputAmountFor(ingredient.key);
         if (outputPerCraft <= 0) {
             node.status = "invalid_recipe_output";
@@ -138,7 +180,7 @@ public final class CraftingTreeCalculator {
             input.status = "selected";
             input.selected = selectedIngredient;
             input.requiredAmount = requiredAmount;
-            input.child = buildNode(index, state, selectedIngredient, requiredAmount, depth + 1, maxDepth, path);
+            input.child = buildNode(index, state, selectedIngredient, requiredAmount, depth + 1, maxDepth, path, recipeSelector);
             node.inputs.add(input);
         }
         path.remove(ingredient.key);
@@ -207,6 +249,7 @@ public final class CraftingTreeCalculator {
     public static final class CraftingTreeResult {
         public String generatedAt;
         public boolean includeHidden;
+        public String recipeLibrary;
         public int maxDepth;
         public int scannedRecipeCount;
         public IngredientData target;
@@ -224,6 +267,7 @@ public final class CraftingTreeCalculator {
         public String status;
         public String selectedRecipeId;
         public String selectedRecipeType;
+        public String selectedRecipeSource;
         public int candidateRecipeCount;
         public List<String> candidateRecipes = new ArrayList<>();
         public long outputPerCraft;
@@ -262,5 +306,10 @@ public final class CraftingTreeCalculator {
             unresolved.reason = reason;
             return unresolved;
         }
+    }
+
+    @FunctionalInterface
+    public interface RecipeSelector {
+        Optional<String> selectedRecipeId(IngredientKey ingredientKey);
     }
 }
