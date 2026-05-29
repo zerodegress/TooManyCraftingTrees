@@ -190,6 +190,13 @@ Example:
 List all candidate recipes that can produce an item.
 
 This is usually the first command to run before assigning a library selection.
+Candidate entries are shown as a composite selector id:
+
+```text
+<recipeType> | <recipeId>
+```
+
+This avoids ambiguity when multiple recipe types reuse the same `recipeId`, such as furnace glass and electric-furnace glass both using `minecraft:glass`.
 
 Syntax:
 
@@ -231,13 +238,13 @@ Syntax:
 
 Notes:
 
-- `recipeId` must match one of the values shown by `/tmct library candidates <item>`
+- `recipeId` must match one of the composite selector ids shown by `/tmct library candidates <item>`
 - The implementation validates that the selected recipe is actually a candidate for the item
 
 Example:
 
 ```text
-/tmct library set default minecraft:stick minecraft:stick
+/tmct library set default minecraft:stick minecraft:crafting | minecraft:stick
 ```
 
 ### `/tmct library clear`

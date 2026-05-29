@@ -471,6 +471,11 @@ public final class JeiRecipeScanner {
             return recipeId == null ? recipeType + " / " + recipeObjectClass : recipeId;
         }
 
+        public String selectorId() {
+            String baseId = displayId();
+            return recipeType == null ? baseId : recipeType + " | " + baseId;
+        }
+
         private long amountFromSlots(IngredientKey key) {
             long amount = 0;
             for (RecipeSlotData slot : slots) {

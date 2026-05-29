@@ -91,7 +91,7 @@ public final class CraftingTreeCalculator {
 
         List<RecipeData> candidates = index.byOutput.getOrDefault(ingredient.key, List.of());
         node.candidateRecipeCount = candidates.size();
-        node.candidateRecipes = candidates.stream().map(RecipeData::displayId).toList();
+        node.candidateRecipes = candidates.stream().map(RecipeData::selectorId).distinct().toList();
         if (candidates.isEmpty()) {
             node.status = "base";
             addAmount(state.baseMaterials, ingredient, requestedAmount);
@@ -102,7 +102,7 @@ public final class CraftingTreeCalculator {
         String preferredRecipeId = recipeSelector.selectedRecipeId(ingredient.key).orElse(null);
         if (preferredRecipeId != null) {
             Optional<RecipeData> selectedRecipe = candidates.stream()
-                .filter(candidate -> preferredRecipeId.equals(candidate.displayId()))
+                .filter(candidate -> preferredRecipeId.equals(candidate.selectorId()))
                 .findFirst();
             if (selectedRecipe.isEmpty()) {
                 node.status = "missing_library_recipe";
@@ -140,7 +140,7 @@ public final class CraftingTreeCalculator {
         long producedAmount = safeMultiply(crafts, outputPerCraft);
 
         node.status = "crafted";
-        node.selectedRecipeId = recipe.displayId();
+        node.selectedRecipeId = recipe.selectorId();
         node.selectedRecipeType = recipe.recipeType;
         node.outputPerCraft = outputPerCraft;
         node.crafts = crafts;

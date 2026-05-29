@@ -326,16 +326,16 @@ public final class TmctClientCommands {
             RecipeScan scan = JeiRecipeScanner.scanAll(source.registryAccess(), true);
             List<RecipeData> candidates = findCandidateRecipes(scan, ingredient);
             RecipeData selectedRecipe = candidates.stream()
-                .filter(candidate -> recipeId.equals(candidate.displayId()))
+                .filter(candidate -> recipeId.equals(candidate.selectorId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
                     "Recipe " + recipeId + " is not a candidate for " + displayName(ingredient)
                 ));
 
-            RecipeLibraryStore.setSelectedRecipe(libraryName, ingredient.key, selectedRecipe.displayId());
+            RecipeLibraryStore.setSelectedRecipe(libraryName, ingredient.key, selectedRecipe.selectorId());
             source.sendSuccess(
                 () -> Component.literal(
-                    "Library " + libraryName + " selects " + selectedRecipe.displayId() + " for " + displayName(ingredient)
+                    "Library " + libraryName + " selects " + selectedRecipe.selectorId() + " for " + displayName(ingredient)
                 ),
                 false
             );
@@ -384,7 +384,7 @@ public final class TmctClientCommands {
             }
 
             String message = candidates.stream()
-                .map(RecipeData::displayId)
+                .map(RecipeData::selectorId)
                 .reduce((left, right) -> left + ", " + right)
                 .orElse("");
             source.sendSuccess(() -> Component.literal("Candidate recipes for " + displayName(ingredient) + ": " + message), false);
@@ -433,7 +433,15 @@ public final class TmctClientCommands {
     private static List<RecipeData> findCandidateRecipes(RecipeScan scan, IngredientData ingredient) {
         return scan.recipes.stream()
             .filter(recipe -> recipe.outputIngredients().stream().anyMatch(output -> ingredient.key.equals(output.key)))
-            .sorted(Comparator.comparing(RecipeData::displayId))
+            .collect(java.util.stream.Collectors.toMap(
+                RecipeData::selectorId,
+                recipe -> recipe,
+                (left, right) -> left,
+                java.util.LinkedHashMap::new
+            ))
+            .values()
+            .stream()
+            .sorted(Comparator.comparing(RecipeData::selectorId))
             .toList();
     }
 

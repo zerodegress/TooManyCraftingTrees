@@ -84,7 +84,7 @@ public final class SimpleTreeCalculator {
         String preferredRecipeId = recipeSelector.selectedRecipeId(ingredient.key).orElse(null);
         if (preferredRecipeId != null) {
             Optional<RecipeData> selectedRecipe = candidates.stream()
-                .filter(candidate -> preferredRecipeId.equals(candidate.displayId()))
+                .filter(candidate -> preferredRecipeId.equals(candidate.selectorId()))
                 .findFirst();
             if (selectedRecipe.isEmpty()) {
                 return rawNode(state, ingredient, requestedAmount);
@@ -103,7 +103,7 @@ public final class SimpleTreeCalculator {
 
         long crafts = ceilDiv(requestedAmount, outputPerCraft);
         node.type = "recipe";
-        node.recipeId = recipe.displayId();
+        node.recipeId = recipe.selectorId();
         node.recipeType = recipe.recipeType;
         node.crafts = crafts;
         node.byproducts = new ArrayList<>();

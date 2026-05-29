@@ -204,23 +204,31 @@ Fields:
   - `crafted`: recipe selected and expanded
   - `base`: no recipe candidates
   - `ambiguous`: multiple candidates and no explicit library selection
-  - `missing_library_recipe`: library selected a recipe id that is not present in current scan candidates
+  - `missing_library_recipe`: library selected a composite selector id that is not present in current scan candidates
   - `invalid_recipe_output`: selected recipe did not expose matching output amount
   - `depth_limit`: recursion stopped at the configured limit
   - `cycle`: cycle detected in the dependency path
   - `unkeyed`: ingredient had no stable JEI key
-- `selectedRecipeId`: selected recipe id, or `null`
+- `selectedRecipeId`: selected composite selector id, or `null`
 - `selectedRecipeType`: selected recipe type, or `null`
 - `selectedRecipeSource`: why this recipe was chosen
   - `library`: chosen from the selected recipe library
   - `only_candidate`: chosen automatically because it was the only candidate
 - `candidateRecipeCount`: number of candidate recipes producing this output
-- `candidateRecipes`: candidate recipe ids
+- `candidateRecipes`: candidate composite selector ids
 - `outputPerCraft`: amount produced by one craft of the selected recipe
 - `crafts`: number of craft operations required
 - `producedAmount`: total produced amount
 - `surplusAmount`: target output surplus from rounding to whole crafts
 - `inputs`: array of `craftingTreeInput`
+
+Composite selector id format:
+
+```text
+<recipeType> | <recipeId-or-fallback-id>
+```
+
+This is used because `recipeId` alone is not unique across all recipe types.
 
 ### `craftingTreeInput`
 
@@ -301,12 +309,12 @@ Example:
     "requestedAmount": 1,
     "depth": 0,
     "status": "crafted",
-    "selectedRecipeId": "minecraft:chest",
+    "selectedRecipeId": "minecraft:crafting | minecraft:chest",
     "selectedRecipeType": "minecraft:crafting",
     "selectedRecipeSource": "only_candidate",
     "candidateRecipeCount": 1,
     "candidateRecipes": [
-      "minecraft:chest"
+      "minecraft:crafting | minecraft:chest"
     ],
     "outputPerCraft": 1,
     "crafts": 1,
@@ -412,6 +420,7 @@ Fields:
 Notes:
 
 - `simpletree` may use a recipe library during calculation, but the exported JSON does not record which library was used
+- In `simpletree`, `recipeId` is also a composite selector id in the format `<recipeType> | <recipeId-or-fallback-id>`
 - If a node cannot be expanded further, it is emitted as `type: "raw"`
 - `brief.byproducts` is a full-plan total
 - `tree.byproducts` is node-local
@@ -439,7 +448,7 @@ Example:
   },
   "tree": {
     "type": "recipe",
-    "recipeId": "minecraft:chest",
+    "recipeId": "minecraft:crafting | minecraft:chest",
     "recipeType": "minecraft:crafting",
     "crafts": 1,
     "output": {
