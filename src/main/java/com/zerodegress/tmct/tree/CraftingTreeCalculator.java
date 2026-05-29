@@ -1,0 +1,266 @@
+package com.zerodegress.tmct.tree;
+
+import com.zerodegress.tmct.jei.JeiRecipeScanner.IngredientData;
+import com.zerodegress.tmct.jei.JeiRecipeScanner.IngredientKey;
+import com.zerodegress.tmct.jei.JeiRecipeScanner.RecipeData;
+import com.zerodegress.tmct.jei.JeiRecipeScanner.RecipeScan;
+import com.zerodegress.tmct.jei.JeiRecipeScanner.RecipeSlotData;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+public final class CraftingTreeCalculator {
+    private CraftingTreeCalculator() {
+    }
+
+    public static CraftingTreeResult calculate(RecipeScan scan, IngredientData target, long requestedAmount, int maxDepth) {
+        if (target.key == null) {
+            throw new IllegalArgumentException("Target ingredient has no stable JEI key.");
+        }
+
+        RecipeIndex index = RecipeIndex.create(scan);
+        CalculationState state = new CalculationState();
+        CraftingTreeNode root = buildNode(index, state, target, requestedAmount, 0, maxDepth, new LinkedHashSet<>());
+
+        CraftingTreeResult result = new CraftingTreeResult();
+        result.generatedAt = Instant.now().toString();
+        result.includeHidden = scan.includeHidden;
+        result.maxDepth = maxDepth;
+        result.scannedRecipeCount = scan.recipeCount;
+        result.target = target.withAmount(requestedAmount);
+        result.requestedAmount = requestedAmount;
+        result.root = root;
+        result.baseMaterials = List.copyOf(state.baseMaterials.values());
+        result.byproducts = List.copyOf(state.byproducts.values());
+        result.unresolved = List.copyOf(state.unresolved);
+        return result;
+    }
+
+    private static CraftingTreeNode buildNode(
+        RecipeIndex index,
+        CalculationState state,
+        IngredientData ingredient,
+        long requestedAmount,
+        int depth,
+        int maxDepth,
+        Set<IngredientKey> path
+    ) {
+        CraftingTreeNode node = new CraftingTreeNode();
+        node.ingredient = ingredient.withAmount(requestedAmount);
+        node.requestedAmount = requestedAmount;
+        node.depth = depth;
+
+        if (ingredient.key == null) {
+            node.status = "unkeyed";
+            state.unresolved.add(UnresolvedIngredient.of(ingredient, requestedAmount, "ingredient has no JEI key"));
+            addAmount(state.baseMaterials, ingredient, requestedAmount);
+            return node;
+        }
+
+        if (path.contains(ingredient.key)) {
+            node.status = "cycle";
+            state.unresolved.add(UnresolvedIngredient.of(ingredient, requestedAmount, "cycle detected"));
+            return node;
+        }
+
+        if (depth > maxDepth) {
+            node.status = "depth_limit";
+            state.unresolved.add(UnresolvedIngredient.of(ingredient, requestedAmount, "max depth exceeded"));
+            return node;
+        }
+
+        List<RecipeData> candidates = index.byOutput.getOrDefault(ingredient.key, List.of());
+        node.candidateRecipeCount = candidates.size();
+        node.candidateRecipes = candidates.stream().map(RecipeData::displayId).toList();
+        if (candidates.isEmpty()) {
+            node.status = "base";
+            addAmount(state.baseMaterials, ingredient, requestedAmount);
+            return node;
+        }
+
+        RecipeData recipe = candidates.getFirst();
+        long outputPerCraft = recipe.outputAmountFor(ingredient.key);
+        if (outputPerCraft <= 0) {
+            node.status = "invalid_recipe_output";
+            state.unresolved.add(UnresolvedIngredient.of(ingredient, requestedAmount, "selected recipe has no matching output amount"));
+            addAmount(state.baseMaterials, ingredient, requestedAmount);
+            return node;
+        }
+
+        long crafts = ceilDiv(requestedAmount, outputPerCraft);
+        long producedAmount = safeMultiply(crafts, outputPerCraft);
+
+        node.status = "crafted";
+        node.selectedRecipeId = recipe.displayId();
+        node.selectedRecipeType = recipe.recipeType;
+        node.outputPerCraft = outputPerCraft;
+        node.crafts = crafts;
+        node.producedAmount = producedAmount;
+        node.surplusAmount = Math.max(0, producedAmount - requestedAmount);
+
+        if (node.surplusAmount > 0) {
+            IngredientData outputInfo = recipe.outputIngredients().stream()
+                .filter(output -> ingredient.key.equals(output.key))
+                .findFirst()
+                .orElse(ingredient);
+            addAmount(state.byproducts, outputInfo, node.surplusAmount);
+        }
+
+        for (IngredientData output : recipe.selectedOutputIngredients()) {
+            if (!ingredient.key.equals(output.key)) {
+                addAmount(state.byproducts, output, safeMultiply(output.craftAmount(), crafts));
+            }
+        }
+
+        path.add(ingredient.key);
+        for (RecipeSlotData slot : recipe.inputSlots()) {
+            CraftingTreeInput input = new CraftingTreeInput();
+            input.slotName = slot.slotName;
+            input.alternatives = slot.ingredients;
+
+            Optional<IngredientData> selected = slot.firstCraftableIngredient();
+            if (selected.isEmpty()) {
+                input.status = "no_keyed_ingredient";
+                state.unresolved.add(UnresolvedIngredient.of(ingredient, requestedAmount, "input slot has no keyed ingredient"));
+                node.inputs.add(input);
+                continue;
+            }
+
+            IngredientData selectedIngredient = selected.get();
+            long requiredAmount = safeMultiply(selectedIngredient.craftAmount(), crafts);
+            input.status = "selected";
+            input.selected = selectedIngredient;
+            input.requiredAmount = requiredAmount;
+            input.child = buildNode(index, state, selectedIngredient, requiredAmount, depth + 1, maxDepth, path);
+            node.inputs.add(input);
+        }
+        path.remove(ingredient.key);
+
+        return node;
+    }
+
+    private static long ceilDiv(long value, long divisor) {
+        return value / divisor + (value % divisor == 0 ? 0 : 1);
+    }
+
+    private static long safeMultiply(long left, long right) {
+        try {
+            return Math.multiplyExact(left, right);
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private static void addAmount(Map<IngredientKey, AmountedIngredient> amounts, IngredientData ingredient, long amount) {
+        if (ingredient.key == null || amount <= 0) {
+            return;
+        }
+        amounts.compute(ingredient.key, (key, existing) -> {
+            if (existing == null) {
+                return new AmountedIngredient(ingredient.withAmount(amount));
+            }
+            existing.ingredient.amount = safeAdd(existing.ingredient.amount, amount);
+            return existing;
+        });
+    }
+
+    private static long safeAdd(long left, long right) {
+        try {
+            return Math.addExact(left, right);
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private static final class RecipeIndex {
+        private final Map<IngredientKey, List<RecipeData>> byOutput = new LinkedHashMap<>();
+
+        private static RecipeIndex create(RecipeScan scan) {
+            RecipeIndex index = new RecipeIndex();
+            List<RecipeData> sortedRecipes = scan.recipes.stream()
+                .sorted(Comparator.comparing(RecipeData::displayId))
+                .toList();
+            for (RecipeData recipe : sortedRecipes) {
+                for (IngredientData output : recipe.outputIngredients()) {
+                    if (output.key != null) {
+                        index.byOutput.computeIfAbsent(output.key, key -> new ArrayList<>()).add(recipe);
+                    }
+                }
+            }
+            return index;
+        }
+    }
+
+    private static final class CalculationState {
+        private final Map<IngredientKey, AmountedIngredient> baseMaterials = new LinkedHashMap<>();
+        private final Map<IngredientKey, AmountedIngredient> byproducts = new LinkedHashMap<>();
+        private final List<UnresolvedIngredient> unresolved = new ArrayList<>();
+    }
+
+    public static final class CraftingTreeResult {
+        public String generatedAt;
+        public boolean includeHidden;
+        public int maxDepth;
+        public int scannedRecipeCount;
+        public IngredientData target;
+        public long requestedAmount;
+        public CraftingTreeNode root;
+        public List<AmountedIngredient> baseMaterials = new ArrayList<>();
+        public List<AmountedIngredient> byproducts = new ArrayList<>();
+        public List<UnresolvedIngredient> unresolved = new ArrayList<>();
+    }
+
+    public static final class CraftingTreeNode {
+        public IngredientData ingredient;
+        public long requestedAmount;
+        public int depth;
+        public String status;
+        public String selectedRecipeId;
+        public String selectedRecipeType;
+        public int candidateRecipeCount;
+        public List<String> candidateRecipes = new ArrayList<>();
+        public long outputPerCraft;
+        public long crafts;
+        public long producedAmount;
+        public long surplusAmount;
+        public List<CraftingTreeInput> inputs = new ArrayList<>();
+    }
+
+    public static final class CraftingTreeInput {
+        public String status;
+        public String slotName;
+        public IngredientData selected;
+        public long requiredAmount;
+        public List<IngredientData> alternatives = new ArrayList<>();
+        public CraftingTreeNode child;
+    }
+
+    public static final class AmountedIngredient {
+        public IngredientData ingredient;
+
+        public AmountedIngredient(IngredientData ingredient) {
+            this.ingredient = ingredient;
+        }
+    }
+
+    public static final class UnresolvedIngredient {
+        public IngredientData ingredient;
+        public long amount;
+        public String reason;
+
+        public static UnresolvedIngredient of(IngredientData ingredient, long amount, String reason) {
+            UnresolvedIngredient unresolved = new UnresolvedIngredient();
+            unresolved.ingredient = ingredient.withAmount(amount);
+            unresolved.amount = amount;
+            unresolved.reason = reason;
+            return unresolved;
+        }
+    }
+}

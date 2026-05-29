@@ -53,3 +53,11 @@ description='''${mod_description}'''
     versionRange="${minecraft_version_range}"
     ordering="NONE"
     side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="jei"
+    type="required"
+    reason="Too Many Crafting Trees scans JEI runtime recipes on the client."
+    versionRange="[${jei_version},)"
+    ordering="AFTER"
+    side="CLIENT"

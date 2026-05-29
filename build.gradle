@@ -123,8 +123,8 @@ configurations {
 }
 
 dependencies {
-    compileOnly("mezz.jei:jei-26.1-neoforge-api:${jei_version}")
-    runtimeOnly("mezz.jei:jei-26.1-neoforge:${jei_version}")
+    compileOnly("mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}")
+    runtimeOnly("mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}")
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -140,6 +140,7 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             mod_version            : mod_version,
             mod_description        : mod_description,
             authors                : authors,
+            jei_version            : jei_version,
     ]
     inputs.properties replaceProperties
     expand replaceProperties
