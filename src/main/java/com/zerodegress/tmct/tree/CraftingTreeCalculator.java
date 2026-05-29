@@ -162,13 +162,13 @@ public final class CraftingTreeCalculator {
         }
 
         path.add(ingredient.key);
+        Map<IngredientKey, GroupedInput> groupedInputs = new LinkedHashMap<>();
         for (RecipeSlotData slot : recipe.inputSlots()) {
-            CraftingTreeInput input = new CraftingTreeInput();
-            input.slotName = slot.slotName;
-            input.alternatives = slot.ingredients;
-
             Optional<IngredientData> selected = slot.firstCraftableIngredient();
             if (selected.isEmpty()) {
+                CraftingTreeInput input = new CraftingTreeInput();
+                input.slotName = slot.slotName;
+                input.alternatives = slot.ingredients;
                 input.status = "no_keyed_ingredient";
                 state.unresolved.add(UnresolvedIngredient.of(ingredient, requestedAmount, "input slot has no keyed ingredient"));
                 node.inputs.add(input);
@@ -177,10 +177,18 @@ public final class CraftingTreeCalculator {
 
             IngredientData selectedIngredient = selected.get();
             long requiredAmount = safeMultiply(selectedIngredient.craftAmount(), crafts);
-            input.status = "selected";
-            input.selected = selectedIngredient;
-            input.requiredAmount = requiredAmount;
-            input.child = buildNode(index, state, selectedIngredient, requiredAmount, depth + 1, maxDepth, path, recipeSelector);
+            GroupedInput groupedInput = groupedInputs.get(selectedIngredient.key);
+            if (groupedInput == null) {
+                groupedInput = GroupedInput.create(slot.slotName, selectedIngredient, slot.ingredients);
+                groupedInputs.put(selectedIngredient.key, groupedInput);
+            } else {
+                groupedInput.merge(slot.slotName, slot.ingredients);
+            }
+            groupedInput.requiredAmount = safeAdd(groupedInput.requiredAmount, requiredAmount);
+        }
+        for (GroupedInput groupedInput : groupedInputs.values()) {
+            CraftingTreeInput input = groupedInput.toInput();
+            input.child = buildNode(index, state, input.selected, input.requiredAmount, depth + 1, maxDepth, path, recipeSelector);
             node.inputs.add(input);
         }
         path.remove(ingredient.key);
@@ -219,6 +227,30 @@ public final class CraftingTreeCalculator {
         } catch (ArithmeticException exception) {
             return Long.MAX_VALUE;
         }
+    }
+
+    private static void mergeAlternatives(CraftingTreeInput input, List<IngredientData> alternatives) {
+        Map<String, IngredientData> merged = new LinkedHashMap<>();
+        for (IngredientData existing : input.alternatives) {
+            merged.put(alternativeKey(existing), existing);
+        }
+        for (IngredientData alternative : alternatives) {
+            merged.putIfAbsent(alternativeKey(alternative), alternative);
+        }
+        input.alternatives = List.copyOf(merged.values());
+    }
+
+    private static String alternativeKey(IngredientData ingredient) {
+        if (ingredient.key != null) {
+            return ingredient.key.toString();
+        }
+        if (ingredient.identifier != null) {
+            return ingredient.identifier;
+        }
+        if (ingredient.uid != null) {
+            return ingredient.uid;
+        }
+        return ingredient.displayName;
     }
 
     private static final class RecipeIndex {
@@ -305,6 +337,37 @@ public final class CraftingTreeCalculator {
             unresolved.amount = amount;
             unresolved.reason = reason;
             return unresolved;
+        }
+    }
+
+    private static final class GroupedInput {
+        private final CraftingTreeInput input = new CraftingTreeInput();
+        private long requiredAmount;
+        private int slotCount;
+
+        private static GroupedInput create(String slotName, IngredientData selected, List<IngredientData> alternatives) {
+            GroupedInput grouped = new GroupedInput();
+            grouped.input.status = "selected";
+            grouped.input.slotName = slotName;
+            grouped.input.selected = selected;
+            grouped.input.alternatives = List.copyOf(alternatives);
+            grouped.slotCount = 1;
+            return grouped;
+        }
+
+        private void merge(String slotName, List<IngredientData> alternatives) {
+            slotCount++;
+            if (slotCount > 1) {
+                input.slotName = null;
+            } else if (input.slotName != null && !input.slotName.equals(slotName)) {
+                input.slotName = null;
+            }
+            mergeAlternatives(input, alternatives);
+        }
+
+        private CraftingTreeInput toInput() {
+            input.requiredAmount = requiredAmount;
+            return input;
         }
     }
 

@@ -128,6 +128,7 @@ public final class SimpleTreeCalculator {
         }
 
         path.add(ingredient.key);
+        Map<String, AmountedIngredient> groupedInputs = new LinkedHashMap<>();
         for (RecipeSlotData slot : recipe.inputSlots()) {
             Optional<IngredientData> selected = slot.firstCraftableIngredient();
             if (selected.isEmpty()) {
@@ -136,7 +137,19 @@ public final class SimpleTreeCalculator {
 
             IngredientData selectedIngredient = selected.get();
             long requiredAmount = safeMultiply(selectedIngredient.craftAmount(), crafts);
-            node.inputs.add(buildNode(index, state, selectedIngredient, requiredAmount, depth + 1, maxDepth, path, recipeSelector));
+            addAmount(groupedInputs, selectedIngredient, requiredAmount);
+        }
+        for (AmountedIngredient groupedInput : groupedInputs.values()) {
+            node.inputs.add(buildNode(
+                index,
+                state,
+                groupedInput.ingredient,
+                groupedInput.ingredient.amount,
+                depth + 1,
+                maxDepth,
+                path,
+                recipeSelector
+            ));
         }
         path.remove(ingredient.key);
 

@@ -232,7 +232,7 @@ This is used because `recipeId` alone is not unique across all recipe types.
 
 ### `craftingTreeInput`
 
-One input edge from a node to a child node.
+One aggregated input edge from a node to a child node.
 
 Fields:
 
@@ -244,6 +244,12 @@ Fields:
 - `requiredAmount`: amount required for this input after multiplying by craft count
 - `alternatives`: all possible alternatives from the recipe slot
 - `child`: child `craftingTreeNode`, or `null`
+
+Notes:
+
+- Repeated identical selected inputs under the same recipe node are merged before recursion
+- After merging, `requiredAmount` is the total amount needed for that ingredient within the parent recipe step
+- `slotName` may be `null` after merging multiple slots
 
 ### `byproducts`
 
@@ -422,6 +428,7 @@ Notes:
 - `simpletree` may use a recipe library during calculation, but the exported JSON does not record which library was used
 - In `simpletree`, `recipeId` is also a composite selector id in the format `<recipeType> | <recipeId-or-fallback-id>`
 - If a node cannot be expanded further, it is emitted as `type: "raw"`
+- Repeated identical inputs under the same recipe node are merged before recursion, so child counts represent the total demand for that ingredient within that step
 - `brief.byproducts` is a full-plan total
 - `tree.byproducts` is node-local
 
