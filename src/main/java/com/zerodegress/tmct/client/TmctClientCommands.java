@@ -1,7 +1,5 @@
 package com.zerodegress.tmct.client;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
@@ -11,13 +9,8 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.zerodegress.tmct.TooManyCraftingTrees;
-import com.zerodegress.tmct.jei.JeiRecipeScanner;
 import com.zerodegress.tmct.jei.JeiRecipeScanner.IngredientData;
 import com.zerodegress.tmct.jei.JeiRecipeScanner.RecipeData;
-import com.zerodegress.tmct.jei.JeiRecipeScanner.RecipeScan;
-import com.zerodegress.tmct.tree.CraftingTreeCalculator;
-import com.zerodegress.tmct.tree.SimpleTreeCalculator;
-import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.item.ItemArgument;
@@ -30,23 +23,13 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 
 import java.io.IOException;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
 @EventBusSubscriber(modid = TooManyCraftingTrees.MODID, value = Dist.CLIENT)
 public final class TmctClientCommands {
-    private static final Gson GSON = new GsonBuilder()
-        .disableHtmlEscaping()
-        .setPrettyPrinting()
-        .create();
-    private static final DateTimeFormatter FILE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static final TmctClientRecipeService RECIPE_SERVICE = TmctClientRecipeService.getInstance();
 
     private TmctClientCommands() {
     }
@@ -204,13 +187,13 @@ public final class TmctClientCommands {
     private static int dumpRecipes(CommandContext<CommandSourceStack> context, boolean includeHidden) {
         CommandSourceStack source = context.getSource();
         try {
-            RecipeScan scan = JeiRecipeScanner.scanAll(source.registryAccess(), includeHidden);
-            Path file = writeJson("jei-recipes-" + timestamp() + ".json", scan);
+            Path file = RECIPE_SERVICE.exportRecipeScan(source.registryAccess(), includeHidden);
+            int recipeCount = RECIPE_SERVICE.getOrBuildScan(source.registryAccess(), includeHidden).recipeCount;
             source.sendSuccess(
-                () -> Component.literal("Exported " + scan.recipeCount + " JEI recipes to " + file.toAbsolutePath()),
+                () -> Component.literal("Exported " + recipeCount + " JEI recipes to " + file.toAbsolutePath()),
                 false
             );
-            return scan.recipeCount;
+            return recipeCount;
         } catch (Exception exception) {
             TooManyCraftingTrees.LOGGER.error("Failed to export JEI recipes", exception);
             source.sendFailure(Component.literal("Failed to export JEI recipes: " + exception.getMessage()));
@@ -229,24 +212,25 @@ public final class TmctClientCommands {
             long requestedAmount = LongArgumentType.getLong(context, "count");
             ItemStack targetStack = itemInput.createItemStack(1);
 
-            RecipeScan scan = JeiRecipeScanner.scanAll(source.registryAccess(), includeHidden);
-            IngredientData target = JeiRecipeScanner.describeItemStack(source.registryAccess(), targetStack);
             String selectedLibrary = libraryName == null ? null : requireLibrary(source, libraryName);
-            var result = CraftingTreeCalculator.calculate(
-                scan,
-                target,
+            TmctClientRecipeService.ExportedFile export = RECIPE_SERVICE.exportTree(
+                source.registryAccess(),
+                targetStack,
                 requestedAmount,
+                includeHidden,
                 maxDepth,
-                ingredientKey -> selectedRecipeFromLibrary(selectedLibrary, ingredientKey),
                 selectedLibrary
             );
-
-            String targetName = target.identifier == null ? "target" : target.identifier;
-            Path file = writeJson("crafting-tree-" + safeFileName(targetName) + "-" + timestamp() + ".json", result);
             String librarySuffix = selectedLibrary == null ? "" : " using library " + selectedLibrary;
             source.sendSuccess(
                 () -> Component.literal(
-                    "Exported crafting tree for " + targetName + " x" + requestedAmount + librarySuffix + " to " + file.toAbsolutePath()
+                    "Exported crafting tree for "
+                        + export.targetName()
+                        + " x"
+                        + requestedAmount
+                        + librarySuffix
+                        + " to "
+                        + export.file().toAbsolutePath()
                 ),
                 false
             );
@@ -269,24 +253,25 @@ public final class TmctClientCommands {
             long requestedAmount = LongArgumentType.getLong(context, "count");
             ItemStack targetStack = itemInput.createItemStack(1);
 
-            RecipeScan scan = JeiRecipeScanner.scanAll(source.registryAccess(), includeHidden);
-            IngredientData target = JeiRecipeScanner.describeItemStack(source.registryAccess(), targetStack);
             String selectedLibrary = libraryName == null ? null : requireLibrary(source, libraryName);
-            var result = SimpleTreeCalculator.calculate(
-                scan,
-                target,
+            TmctClientRecipeService.ExportedFile export = RECIPE_SERVICE.exportSimpleTree(
+                source.registryAccess(),
+                targetStack,
                 requestedAmount,
+                includeHidden,
                 maxDepth,
-                ingredientKey -> selectedRecipeFromLibrary(selectedLibrary, ingredientKey),
                 selectedLibrary
             );
-
-            String targetName = target.identifier == null ? "target" : target.identifier;
-            Path file = writeJson("simple-tree-" + safeFileName(targetName) + "-" + timestamp() + ".json", result);
             String librarySuffix = selectedLibrary == null ? "" : " using library " + selectedLibrary;
             source.sendSuccess(
                 () -> Component.literal(
-                    "Exported simple tree for " + targetName + " x" + requestedAmount + librarySuffix + " to " + file.toAbsolutePath()
+                    "Exported simple tree for "
+                        + export.targetName()
+                        + " x"
+                        + requestedAmount
+                        + librarySuffix
+                        + " to "
+                        + export.file().toAbsolutePath()
                 ),
                 false
             );
@@ -338,7 +323,7 @@ public final class TmctClientCommands {
         String libraryName = StringArgumentType.getString(context, "name");
         try {
             ItemStack stack = ItemArgument.getItem(context, "item").createItemStack(1);
-            IngredientData ingredient = JeiRecipeScanner.describeItemStack(source.registryAccess(), stack);
+            IngredientData ingredient = RECIPE_SERVICE.describeItemStack(source.registryAccess(), stack);
             if (ingredient.key == null) {
                 throw new IllegalArgumentException("Item has no stable JEI key.");
             }
@@ -360,13 +345,12 @@ public final class TmctClientCommands {
         String recipeId = StringArgumentType.getString(context, "recipeId");
         try {
             ItemStack stack = ItemArgument.getItem(context, "item").createItemStack(1);
-            IngredientData ingredient = JeiRecipeScanner.describeItemStack(source.registryAccess(), stack);
+            IngredientData ingredient = RECIPE_SERVICE.describeItemStack(source.registryAccess(), stack);
             if (ingredient.key == null) {
                 throw new IllegalArgumentException("Item has no stable JEI key.");
             }
 
-            RecipeScan scan = JeiRecipeScanner.scanAll(source.registryAccess(), true);
-            List<RecipeData> candidates = findCandidateRecipes(scan, ingredient);
+            List<RecipeData> candidates = RECIPE_SERVICE.findCandidateRecipes(source.registryAccess(), ingredient, true);
             RecipeData selectedRecipe = candidates.stream()
                 .filter(candidate -> recipeId.equals(candidate.selectorId()))
                 .findFirst()
@@ -392,7 +376,7 @@ public final class TmctClientCommands {
         String libraryName = StringArgumentType.getString(context, "name");
         try {
             ItemStack stack = ItemArgument.getItem(context, "item").createItemStack(1);
-            IngredientData ingredient = JeiRecipeScanner.describeItemStack(source.registryAccess(), stack);
+            IngredientData ingredient = RECIPE_SERVICE.describeItemStack(source.registryAccess(), stack);
             if (ingredient.key == null) {
                 throw new IllegalArgumentException("Item has no stable JEI key.");
             }
@@ -413,13 +397,12 @@ public final class TmctClientCommands {
         CommandSourceStack source = context.getSource();
         try {
             ItemStack stack = ItemArgument.getItem(context, "item").createItemStack(1);
-            IngredientData ingredient = JeiRecipeScanner.describeItemStack(source.registryAccess(), stack);
+            IngredientData ingredient = RECIPE_SERVICE.describeItemStack(source.registryAccess(), stack);
             if (ingredient.key == null) {
                 throw new IllegalArgumentException("Item has no stable JEI key.");
             }
 
-            RecipeScan scan = JeiRecipeScanner.scanAll(source.registryAccess(), true);
-            List<RecipeData> candidates = findCandidateRecipes(scan, ingredient);
+            List<RecipeData> candidates = RECIPE_SERVICE.findCandidateRecipes(source.registryAccess(), ingredient, true);
             if (candidates.isEmpty()) {
                 source.sendSuccess(() -> Component.literal("No candidate recipes for " + displayName(ingredient)), false);
                 return 0;
@@ -436,55 +419,11 @@ public final class TmctClientCommands {
         }
     }
 
-    private static Path writeJson(String fileName, Object value) throws IOException {
-        Path exportDir = Minecraft.getInstance().gameDirectory.toPath().resolve("tmct_exports");
-        Files.createDirectories(exportDir);
-        Path file = exportDir.resolve(fileName);
-        try (Writer writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
-            GSON.toJson(value, writer);
-        }
-        return file;
-    }
-
-    private static String timestamp() {
-        return LocalDateTime.now().format(FILE_TIME_FORMAT);
-    }
-
-    private static String safeFileName(String value) {
-        return value.replaceAll("[^a-zA-Z0-9._-]", "_");
-    }
-
     private static String requireLibrary(CommandSourceStack source, String libraryName) throws IOException {
         if (!RecipeLibraryStore.libraryExists(libraryName)) {
             throw new IllegalArgumentException("Recipe library does not exist: " + libraryName);
         }
         return libraryName;
-    }
-
-    private static Optional<String> selectedRecipeFromLibrary(String libraryName, JeiRecipeScanner.IngredientKey ingredientKey) {
-        if (libraryName == null) {
-            return Optional.empty();
-        }
-        try {
-            return RecipeLibraryStore.getSelectedRecipe(libraryName, ingredientKey);
-        } catch (IOException exception) {
-            throw new IllegalStateException("Failed to read recipe library " + libraryName, exception);
-        }
-    }
-
-    private static List<RecipeData> findCandidateRecipes(RecipeScan scan, IngredientData ingredient) {
-        return scan.recipes.stream()
-            .filter(recipe -> recipe.outputIngredients().stream().anyMatch(output -> ingredient.key.equals(output.key)))
-            .collect(java.util.stream.Collectors.toMap(
-                RecipeData::selectorId,
-                recipe -> recipe,
-                (left, right) -> left,
-                java.util.LinkedHashMap::new
-            ))
-            .values()
-            .stream()
-            .sorted(Comparator.comparing(RecipeData::selectorId))
-            .toList();
     }
 
     private static String displayName(IngredientData ingredient) {
