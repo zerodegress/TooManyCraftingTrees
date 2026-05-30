@@ -57,11 +57,13 @@ Syntax:
 
 ```text
 /tmct tree <item> <count>
-/tmct tree <item> <count> <library>
-/tmct tree <item> <count> <includeHidden>
-/tmct tree <item> <count> <includeHidden> <library>
-/tmct tree <item> <count> <includeHidden> <maxDepth>
-/tmct tree <item> <count> <includeHidden> <maxDepth> <library>
+/tmct tree <item> <count> library <library>
+/tmct tree <item> <count> hidden <includeHidden>
+/tmct tree <item> <count> hidden <includeHidden> library <library>
+/tmct tree <item> <count> hidden <includeHidden> depth <maxDepth>
+/tmct tree <item> <count> hidden <includeHidden> depth <maxDepth> library <library>
+/tmct tree <item> <count> depth <maxDepth>
+/tmct tree <item> <count> depth <maxDepth> library <library>
 ```
 
 Arguments:
@@ -89,9 +91,9 @@ Examples:
 
 ```text
 /tmct tree minecraft:chest 1
-/tmct tree minecraft:chest 1 true
-/tmct tree minecraft:chest 1 default
-/tmct tree minecraft:chest 1 true 16 default
+/tmct tree minecraft:chest 1 hidden true
+/tmct tree minecraft:chest 1 library default
+/tmct tree minecraft:chest 1 hidden true depth 16 library default
 ```
 
 ### `/tmct simpletree`
@@ -110,11 +112,13 @@ Syntax:
 
 ```text
 /tmct simpletree <item> <count>
-/tmct simpletree <item> <count> <library>
-/tmct simpletree <item> <count> <includeHidden>
-/tmct simpletree <item> <count> <includeHidden> <library>
-/tmct simpletree <item> <count> <includeHidden> <maxDepth>
-/tmct simpletree <item> <count> <includeHidden> <maxDepth> <library>
+/tmct simpletree <item> <count> library <library>
+/tmct simpletree <item> <count> hidden <includeHidden>
+/tmct simpletree <item> <count> hidden <includeHidden> library <library>
+/tmct simpletree <item> <count> hidden <includeHidden> depth <maxDepth>
+/tmct simpletree <item> <count> hidden <includeHidden> depth <maxDepth> library <library>
+/tmct simpletree <item> <count> depth <maxDepth>
+/tmct simpletree <item> <count> depth <maxDepth> library <library>
 ```
 
 Arguments:
@@ -134,8 +138,8 @@ Examples:
 
 ```text
 /tmct simpletree minecraft:chest 1
-/tmct simpletree minecraft:chest 1 default
-/tmct simpletree minecraft:chest 1 true 16 default
+/tmct simpletree minecraft:chest 1 library default
+/tmct simpletree minecraft:chest 1 hidden true depth 16 library default
 ```
 
 ### `/tmct library list`

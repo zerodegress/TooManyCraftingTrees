@@ -427,12 +427,14 @@ Fields:
 - `recipe` nodes contain `recipeId`, `recipeType`, `crafts`, `output`, `byproducts`, and `inputs`
 - `raw` nodes contain only `type` and `output`
 - `output`: requested output at this node
+- `recipeId`: raw recipe id or fallback display id for this step; not guaranteed to be globally unique by itself
+- `recipeType`: recipe type for this step; use `recipeType` together with `recipeId` to identify a recipe node
 - Each `simpleItem` in `output`, `byproducts`, or `inputs` may have a `tag` field: item tag id if the ingredient was tag-based (e.g. `minecraft:planks`), or `null`
 
 Notes:
 
 - `simpletree` may use a recipe library during calculation, but the exported JSON does not record which library was used
-- In `simpletree`, `recipeId` is also a composite selector id in the format `<recipeType> | <recipeId-or-fallback-id>`
+- In `simpletree`, `recipeId` is not a composite selector id; if you need uniqueness, combine `recipeType` and `recipeId`
 - If a node cannot be expanded further, it is emitted as `type: "raw"`
 - Repeated identical inputs under the same recipe node are merged before recursion, so child counts represent the total demand for that ingredient within that step
 - `brief.byproducts` is a full-plan total

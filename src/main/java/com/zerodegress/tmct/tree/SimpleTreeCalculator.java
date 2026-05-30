@@ -111,7 +111,7 @@ public final class SimpleTreeCalculator {
 
         long crafts = TreeMath.ceilDiv(requestedAmount, outputPerCraft);
         node.type = "recipe";
-        node.recipeId = recipe.selectorId();
+        node.recipeId = recipe.displayId();
         node.recipeType = recipe.recipeType;
         node.crafts = crafts;
         node.byproducts = new ArrayList<>();

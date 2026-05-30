@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -63,73 +64,8 @@ public final class TmctClientCommands {
             .then(Commands.argument("includeHidden", BoolArgumentType.bool())
                 .executes(context -> dumpRecipes(context, BoolArgumentType.getBool(context, "includeHidden")))));
 
-        root.then(Commands.literal("tree")
-            .then(Commands.argument("item", ItemArgument.item(event.getBuildContext()))
-                .then(Commands.argument("count", LongArgumentType.longArg(1))
-                    .executes(context -> exportTree(context, false, 16))
-                    .then(Commands.argument("library", StringArgumentType.word())
-                        .executes(context -> exportTree(
-                            context,
-                            false,
-                            16,
-                            StringArgumentType.getString(context, "library")
-                        )))
-                    .then(Commands.argument("includeHidden", BoolArgumentType.bool())
-                        .executes(context -> exportTree(context, BoolArgumentType.getBool(context, "includeHidden"), 16))
-                        .then(Commands.argument("library", StringArgumentType.word())
-                            .executes(context -> exportTree(
-                                context,
-                                BoolArgumentType.getBool(context, "includeHidden"),
-                                16,
-                                StringArgumentType.getString(context, "library")
-                            )))
-                        .then(Commands.argument("maxDepth", IntegerArgumentType.integer(1, 64))
-                            .executes(context -> exportTree(
-                                context,
-                                BoolArgumentType.getBool(context, "includeHidden"),
-                                IntegerArgumentType.getInteger(context, "maxDepth")
-                            ))
-                            .then(Commands.argument("library", StringArgumentType.word())
-                                .executes(context -> exportTree(
-                                    context,
-                                    BoolArgumentType.getBool(context, "includeHidden"),
-                                    IntegerArgumentType.getInteger(context, "maxDepth"),
-                                    StringArgumentType.getString(context, "library")
-                                ))))))));
-
-        root.then(Commands.literal("simpletree")
-            .then(Commands.argument("item", ItemArgument.item(event.getBuildContext()))
-                .then(Commands.argument("count", LongArgumentType.longArg(1))
-                    .executes(context -> exportSimpleTree(context, false, 16))
-                    .then(Commands.argument("library", StringArgumentType.word())
-                        .executes(context -> exportSimpleTree(
-                            context,
-                            false,
-                            16,
-                            StringArgumentType.getString(context, "library")
-                        )))
-                    .then(Commands.argument("includeHidden", BoolArgumentType.bool())
-                        .executes(context -> exportSimpleTree(context, BoolArgumentType.getBool(context, "includeHidden"), 16))
-                        .then(Commands.argument("library", StringArgumentType.word())
-                            .executes(context -> exportSimpleTree(
-                                context,
-                                BoolArgumentType.getBool(context, "includeHidden"),
-                                16,
-                                StringArgumentType.getString(context, "library")
-                            )))
-                        .then(Commands.argument("maxDepth", IntegerArgumentType.integer(1, 64))
-                            .executes(context -> exportSimpleTree(
-                                context,
-                                BoolArgumentType.getBool(context, "includeHidden"),
-                                IntegerArgumentType.getInteger(context, "maxDepth")
-                            ))
-                            .then(Commands.argument("library", StringArgumentType.word())
-                                .executes(context -> exportSimpleTree(
-                                    context,
-                                    BoolArgumentType.getBool(context, "includeHidden"),
-                                    IntegerArgumentType.getInteger(context, "maxDepth"),
-                                    StringArgumentType.getString(context, "library")
-                                ))))))));
+        root.then(buildTreeCommand("tree", event, false));
+        root.then(buildTreeCommand("simpletree", event, true));
 
         root.then(Commands.literal("library")
             .then(Commands.literal("list")
@@ -158,6 +94,111 @@ public final class TmctClientCommands {
                     .executes(TmctClientCommands::showCandidates))));
 
         dispatcher.register(root);
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> buildTreeCommand(
+        String literal,
+        RegisterClientCommandsEvent event,
+        boolean simple
+    ) {
+        LiteralArgumentBuilder<CommandSourceStack> command = Commands.literal(literal);
+        RequiredArgumentBuilder<CommandSourceStack, Long> count = Commands.argument("count", LongArgumentType.longArg(1));
+        count.executes(context -> simple ? exportSimpleTree(context, false, 16) : exportTree(context, false, 16));
+        attachTreeBranches(count, event, simple);
+        command.then(Commands.argument("item", ItemArgument.item(event.getBuildContext())).then(count));
+        return command;
+    }
+
+    private static void attachTreeBranches(
+        RequiredArgumentBuilder<CommandSourceStack, Long> count,
+        RegisterClientCommandsEvent event,
+        boolean simple
+    ) {
+        LiteralArgumentBuilder<CommandSourceStack> library = Commands.literal("library");
+        library.then(Commands.argument("library", StringArgumentType.word())
+            .executes(context -> simple
+                ? exportSimpleTree(context, false, 16, StringArgumentType.getString(context, "library"))
+                : exportTree(context, false, 16, StringArgumentType.getString(context, "library"))));
+
+        LiteralArgumentBuilder<CommandSourceStack> depth = Commands.literal("depth");
+        RequiredArgumentBuilder<CommandSourceStack, Integer> maxDepth = Commands.argument("maxDepth", IntegerArgumentType.integer(1, 64));
+        maxDepth.executes(context -> simple
+            ? exportSimpleTree(context, false, IntegerArgumentType.getInteger(context, "maxDepth"))
+            : exportTree(context, false, IntegerArgumentType.getInteger(context, "maxDepth")));
+        LiteralArgumentBuilder<CommandSourceStack> depthLibrary = Commands.literal("library");
+        depthLibrary.then(Commands.argument("library", StringArgumentType.word())
+            .executes(context -> simple
+                ? exportSimpleTree(
+                    context,
+                    false,
+                    IntegerArgumentType.getInteger(context, "maxDepth"),
+                    StringArgumentType.getString(context, "library")
+                )
+                : exportTree(
+                    context,
+                    false,
+                    IntegerArgumentType.getInteger(context, "maxDepth"),
+                    StringArgumentType.getString(context, "library")
+                )));
+        maxDepth.then(depthLibrary);
+        depth.then(maxDepth);
+
+        LiteralArgumentBuilder<CommandSourceStack> hidden = Commands.literal("hidden");
+        RequiredArgumentBuilder<CommandSourceStack, Boolean> includeHidden = Commands.argument("includeHidden", BoolArgumentType.bool());
+        includeHidden.executes(context -> simple
+            ? exportSimpleTree(context, BoolArgumentType.getBool(context, "includeHidden"), 16)
+            : exportTree(context, BoolArgumentType.getBool(context, "includeHidden"), 16));
+        LiteralArgumentBuilder<CommandSourceStack> hiddenLibrary = Commands.literal("library");
+        hiddenLibrary.then(Commands.argument("library", StringArgumentType.word())
+            .executes(context -> simple
+                ? exportSimpleTree(
+                    context,
+                    BoolArgumentType.getBool(context, "includeHidden"),
+                    16,
+                    StringArgumentType.getString(context, "library")
+                )
+                : exportTree(
+                    context,
+                    BoolArgumentType.getBool(context, "includeHidden"),
+                    16,
+                    StringArgumentType.getString(context, "library")
+                )));
+        includeHidden.then(hiddenLibrary);
+        LiteralArgumentBuilder<CommandSourceStack> hiddenDepth = Commands.literal("depth");
+        RequiredArgumentBuilder<CommandSourceStack, Integer> hiddenMaxDepth = Commands.argument("maxDepth", IntegerArgumentType.integer(1, 64));
+        hiddenMaxDepth.executes(context -> simple
+            ? exportSimpleTree(
+                context,
+                BoolArgumentType.getBool(context, "includeHidden"),
+                IntegerArgumentType.getInteger(context, "maxDepth")
+            )
+            : exportTree(
+                context,
+                BoolArgumentType.getBool(context, "includeHidden"),
+                IntegerArgumentType.getInteger(context, "maxDepth")
+            ));
+        LiteralArgumentBuilder<CommandSourceStack> hiddenDepthLibrary = Commands.literal("library");
+        hiddenDepthLibrary.then(Commands.argument("library", StringArgumentType.word())
+            .executes(context -> simple
+                ? exportSimpleTree(
+                    context,
+                    BoolArgumentType.getBool(context, "includeHidden"),
+                    IntegerArgumentType.getInteger(context, "maxDepth"),
+                    StringArgumentType.getString(context, "library")
+                )
+                : exportTree(
+                    context,
+                    BoolArgumentType.getBool(context, "includeHidden"),
+                    IntegerArgumentType.getInteger(context, "maxDepth"),
+                    StringArgumentType.getString(context, "library")
+                )));
+        hiddenMaxDepth.then(hiddenDepthLibrary);
+        hiddenDepth.then(hiddenMaxDepth);
+        includeHidden.then(hiddenDepth);
+
+        count.then(library);
+        count.then(depth);
+        count.then(hidden);
     }
 
     private static int dumpRecipes(CommandContext<CommandSourceStack> context, boolean includeHidden) {
