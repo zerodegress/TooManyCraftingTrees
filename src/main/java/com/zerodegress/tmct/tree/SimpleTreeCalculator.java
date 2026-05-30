@@ -8,7 +8,6 @@ import com.zerodegress.tmct.jei.JeiRecipeScanner.RecipeSlotData;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -25,7 +24,7 @@ public final class SimpleTreeCalculator {
         IngredientData target,
         long requestedAmount,
         int maxDepth,
-        CraftingTreeCalculator.RecipeSelector recipeSelector
+        RecipeSelector recipeSelector
     ) {
         if (target.key == null) {
             throw new IllegalArgumentException("Target ingredient has no stable JEI key.");
@@ -56,7 +55,7 @@ public final class SimpleTreeCalculator {
         int depth,
         int maxDepth,
         Set<IngredientKey> path,
-        CraftingTreeCalculator.RecipeSelector recipeSelector
+        RecipeSelector recipeSelector
     ) {
         SimpleTreeNode node = new SimpleTreeNode();
         node.output = simpleItem(ingredient, requestedAmount);
@@ -75,33 +74,18 @@ public final class SimpleTreeCalculator {
             return rawNode(state, ingredient, requestedAmount);
         }
 
-        List<RecipeData> candidates = index.byOutput.getOrDefault(ingredient.key, List.of());
-        if (candidates.isEmpty()) {
+        RecipeResolver.Resolution resolution = RecipeResolver.resolve(index, ingredient.key, recipeSelector);
+        if (!resolution.isSelected()) {
             return rawNode(state, ingredient, requestedAmount);
         }
 
-        RecipeData recipe;
-        String preferredRecipeId = recipeSelector.selectedRecipeId(ingredient.key).orElse(null);
-        if (preferredRecipeId != null) {
-            Optional<RecipeData> selectedRecipe = candidates.stream()
-                .filter(candidate -> preferredRecipeId.equals(candidate.selectorId()))
-                .findFirst();
-            if (selectedRecipe.isEmpty()) {
-                return rawNode(state, ingredient, requestedAmount);
-            }
-            recipe = selectedRecipe.get();
-        } else if (candidates.size() == 1) {
-            recipe = candidates.getFirst();
-        } else {
-            return rawNode(state, ingredient, requestedAmount);
-        }
-
+        RecipeData recipe = resolution.recipe;
         long outputPerCraft = recipe.outputAmountFor(ingredient.key);
         if (outputPerCraft <= 0) {
             return rawNode(state, ingredient, requestedAmount);
         }
 
-        long crafts = ceilDiv(requestedAmount, outputPerCraft);
+        long crafts = TreeMath.ceilDiv(requestedAmount, outputPerCraft);
         node.type = "recipe";
         node.recipeId = recipe.selectorId();
         node.recipeType = recipe.recipeType;
@@ -109,7 +93,7 @@ public final class SimpleTreeCalculator {
         node.byproducts = new ArrayList<>();
         node.inputs = new ArrayList<>();
 
-        long surplusAmount = Math.max(0, safeMultiply(crafts, outputPerCraft) - requestedAmount);
+        long surplusAmount = Math.max(0, TreeMath.safeMultiply(crafts, outputPerCraft) - requestedAmount);
         if (surplusAmount > 0) {
             IngredientData outputInfo = recipe.outputIngredients().stream()
                 .filter(output -> ingredient.key.equals(output.key))
@@ -121,7 +105,7 @@ public final class SimpleTreeCalculator {
 
         for (IngredientData output : recipe.selectedOutputIngredients()) {
             if (!ingredient.key.equals(output.key)) {
-                long byproductAmount = safeMultiply(output.craftAmount(), crafts);
+                long byproductAmount = TreeMath.safeMultiply(output.craftAmount(), crafts);
                 addAmount(state.byproducts, output, byproductAmount);
                 node.byproducts.add(simpleItem(output, byproductAmount));
             }
@@ -136,7 +120,7 @@ public final class SimpleTreeCalculator {
             }
 
             IngredientData selectedIngredient = selected.get();
-            long requiredAmount = safeMultiply(selectedIngredient.craftAmount(), crafts);
+            long requiredAmount = TreeMath.safeMultiply(selectedIngredient.craftAmount(), crafts);
             addAmount(groupedInputs, selectedIngredient, requiredAmount);
         }
         for (AmountedIngredient groupedInput : groupedInputs.values()) {
@@ -193,18 +177,6 @@ public final class SimpleTreeCalculator {
         return ingredient.displayName;
     }
 
-    private static long ceilDiv(long value, long divisor) {
-        return value / divisor + (value % divisor == 0 ? 0 : 1);
-    }
-
-    private static long safeMultiply(long left, long right) {
-        try {
-            return Math.multiplyExact(left, right);
-        } catch (ArithmeticException exception) {
-            return Long.MAX_VALUE;
-        }
-    }
-
     private static void addAmount(Map<String, AmountedIngredient> amounts, IngredientData ingredient, long amount) {
         if (amount <= 0) {
             return;
@@ -217,7 +189,7 @@ public final class SimpleTreeCalculator {
             if (existing == null) {
                 return new AmountedIngredient(ingredient.withAmount(amount));
             }
-            existing.ingredient.amount = safeAdd(existing.ingredient.amount, amount);
+            existing.ingredient.amount = TreeMath.safeAdd(existing.ingredient.amount, amount);
             return existing;
         });
     }
@@ -231,33 +203,6 @@ public final class SimpleTreeCalculator {
             return "display:" + identifier;
         }
         return null;
-    }
-
-    private static long safeAdd(long left, long right) {
-        try {
-            return Math.addExact(left, right);
-        } catch (ArithmeticException exception) {
-            return Long.MAX_VALUE;
-        }
-    }
-
-    private static final class RecipeIndex {
-        private final Map<IngredientKey, List<RecipeData>> byOutput = new LinkedHashMap<>();
-
-        private static RecipeIndex create(RecipeScan scan) {
-            RecipeIndex index = new RecipeIndex();
-            List<RecipeData> sortedRecipes = scan.recipes.stream()
-                .sorted(Comparator.comparing(RecipeData::displayId))
-                .toList();
-            for (RecipeData recipe : sortedRecipes) {
-                for (IngredientData output : recipe.outputIngredients()) {
-                    if (output.key != null) {
-                        index.byOutput.computeIfAbsent(output.key, key -> new ArrayList<>()).add(recipe);
-                    }
-                }
-            }
-            return index;
-        }
     }
 
     private static final class CalculationState {
@@ -302,5 +247,4 @@ public final class SimpleTreeCalculator {
         public String item;
         public long count;
     }
-
 }

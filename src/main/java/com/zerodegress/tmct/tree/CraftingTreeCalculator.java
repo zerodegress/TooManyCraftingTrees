@@ -8,7 +8,6 @@ import com.zerodegress.tmct.jei.JeiRecipeScanner.RecipeSlotData;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -89,45 +88,38 @@ public final class CraftingTreeCalculator {
             return node;
         }
 
-        List<RecipeData> candidates = index.byOutput.getOrDefault(ingredient.key, List.of());
-        node.candidateRecipeCount = candidates.size();
-        node.candidateRecipes = candidates.stream().map(RecipeData::selectorId).distinct().toList();
-        if (candidates.isEmpty()) {
-            node.status = "base";
-            addAmount(state.baseMaterials, ingredient, requestedAmount);
-            return node;
-        }
+        RecipeResolver.Resolution resolution = RecipeResolver.resolve(index, ingredient.key, recipeSelector);
+        node.candidateRecipeCount = resolution.candidates.size();
+        node.candidateRecipes = resolution.candidates.stream().map(RecipeData::selectorId).distinct().toList();
 
-        RecipeData recipe;
-        String preferredRecipeId = recipeSelector.selectedRecipeId(ingredient.key).orElse(null);
-        if (preferredRecipeId != null) {
-            Optional<RecipeData> selectedRecipe = candidates.stream()
-                .filter(candidate -> preferredRecipeId.equals(candidate.selectorId()))
-                .findFirst();
-            if (selectedRecipe.isEmpty()) {
+        switch (resolution.status) {
+            case NO_CANDIDATES -> {
+                node.status = "base";
+                addAmount(state.baseMaterials, ingredient, requestedAmount);
+                return node;
+            }
+            case MISSING_LIBRARY_RECIPE -> {
                 node.status = "missing_library_recipe";
                 state.unresolved.add(UnresolvedIngredient.of(
                     ingredient,
                     requestedAmount,
-                    "recipe library selected unavailable recipe " + preferredRecipeId
+                    "recipe library selected unavailable recipe " + resolution.preferredRecipeId
                 ));
                 return node;
             }
-            recipe = selectedRecipe.get();
-            node.selectedRecipeSource = "library";
-        } else if (candidates.size() == 1) {
-            recipe = candidates.getFirst();
-            node.selectedRecipeSource = "only_candidate";
-        } else {
-            node.status = "ambiguous";
-            state.unresolved.add(UnresolvedIngredient.of(
-                ingredient,
-                requestedAmount,
-                "multiple candidate recipes require an explicit recipe library selection"
-            ));
-            return node;
+            case AMBIGUOUS -> {
+                node.status = "ambiguous";
+                state.unresolved.add(UnresolvedIngredient.of(
+                    ingredient,
+                    requestedAmount,
+                    "multiple candidate recipes require an explicit recipe library selection"
+                ));
+                return node;
+            }
+            case SELECTED -> {}
         }
 
+        RecipeData recipe = resolution.recipe;
         long outputPerCraft = recipe.outputAmountFor(ingredient.key);
         if (outputPerCraft <= 0) {
             node.status = "invalid_recipe_output";
@@ -136,12 +128,13 @@ public final class CraftingTreeCalculator {
             return node;
         }
 
-        long crafts = ceilDiv(requestedAmount, outputPerCraft);
-        long producedAmount = safeMultiply(crafts, outputPerCraft);
+        long crafts = TreeMath.ceilDiv(requestedAmount, outputPerCraft);
+        long producedAmount = TreeMath.safeMultiply(crafts, outputPerCraft);
 
         node.status = "crafted";
         node.selectedRecipeId = recipe.selectorId();
         node.selectedRecipeType = recipe.recipeType;
+        node.selectedRecipeSource = resolution.selectionSource;
         node.outputPerCraft = outputPerCraft;
         node.crafts = crafts;
         node.producedAmount = producedAmount;
@@ -157,7 +150,7 @@ public final class CraftingTreeCalculator {
 
         for (IngredientData output : recipe.selectedOutputIngredients()) {
             if (!ingredient.key.equals(output.key)) {
-                addAmount(state.byproducts, output, safeMultiply(output.craftAmount(), crafts));
+                addAmount(state.byproducts, output, TreeMath.safeMultiply(output.craftAmount(), crafts));
             }
         }
 
@@ -176,7 +169,7 @@ public final class CraftingTreeCalculator {
             }
 
             IngredientData selectedIngredient = selected.get();
-            long requiredAmount = safeMultiply(selectedIngredient.craftAmount(), crafts);
+            long requiredAmount = TreeMath.safeMultiply(selectedIngredient.craftAmount(), crafts);
             GroupedInput groupedInput = groupedInputs.get(selectedIngredient.key);
             if (groupedInput == null) {
                 groupedInput = GroupedInput.create(slot.slotName, selectedIngredient, slot.ingredients);
@@ -184,7 +177,7 @@ public final class CraftingTreeCalculator {
             } else {
                 groupedInput.merge(slot.slotName, slot.ingredients);
             }
-            groupedInput.requiredAmount = safeAdd(groupedInput.requiredAmount, requiredAmount);
+            groupedInput.requiredAmount = TreeMath.safeAdd(groupedInput.requiredAmount, requiredAmount);
         }
         for (GroupedInput groupedInput : groupedInputs.values()) {
             CraftingTreeInput input = groupedInput.toInput();
@@ -196,18 +189,6 @@ public final class CraftingTreeCalculator {
         return node;
     }
 
-    private static long ceilDiv(long value, long divisor) {
-        return value / divisor + (value % divisor == 0 ? 0 : 1);
-    }
-
-    private static long safeMultiply(long left, long right) {
-        try {
-            return Math.multiplyExact(left, right);
-        } catch (ArithmeticException exception) {
-            return Long.MAX_VALUE;
-        }
-    }
-
     private static void addAmount(Map<IngredientKey, AmountedIngredient> amounts, IngredientData ingredient, long amount) {
         if (ingredient.key == null || amount <= 0) {
             return;
@@ -216,17 +197,9 @@ public final class CraftingTreeCalculator {
             if (existing == null) {
                 return new AmountedIngredient(ingredient.withAmount(amount));
             }
-            existing.ingredient.amount = safeAdd(existing.ingredient.amount, amount);
+            existing.ingredient.amount = TreeMath.safeAdd(existing.ingredient.amount, amount);
             return existing;
         });
-    }
-
-    private static long safeAdd(long left, long right) {
-        try {
-            return Math.addExact(left, right);
-        } catch (ArithmeticException exception) {
-            return Long.MAX_VALUE;
-        }
     }
 
     private static void mergeAlternatives(CraftingTreeInput input, List<IngredientData> alternatives) {
@@ -251,25 +224,6 @@ public final class CraftingTreeCalculator {
             return ingredient.uid;
         }
         return ingredient.displayName;
-    }
-
-    private static final class RecipeIndex {
-        private final Map<IngredientKey, List<RecipeData>> byOutput = new LinkedHashMap<>();
-
-        private static RecipeIndex create(RecipeScan scan) {
-            RecipeIndex index = new RecipeIndex();
-            List<RecipeData> sortedRecipes = scan.recipes.stream()
-                .sorted(Comparator.comparing(RecipeData::displayId))
-                .toList();
-            for (RecipeData recipe : sortedRecipes) {
-                for (IngredientData output : recipe.outputIngredients()) {
-                    if (output.key != null) {
-                        index.byOutput.computeIfAbsent(output.key, key -> new ArrayList<>()).add(recipe);
-                    }
-                }
-            }
-            return index;
-        }
     }
 
     private static final class CalculationState {
@@ -369,10 +323,5 @@ public final class CraftingTreeCalculator {
             input.requiredAmount = requiredAmount;
             return input;
         }
-    }
-
-    @FunctionalInterface
-    public interface RecipeSelector {
-        Optional<String> selectedRecipeId(IngredientKey ingredientKey);
     }
 }
