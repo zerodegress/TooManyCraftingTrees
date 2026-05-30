@@ -27,13 +27,35 @@ public final class SimpleTreeCalculator {
         int maxDepth,
         RecipeSelector recipeSelector
     ) {
+        return calculate(scan, target, requestedAmount, maxDepth, recipeSelector, null);
+    }
+
+    public static SimpleTreeResult calculate(
+        RecipeScan scan,
+        IngredientData target,
+        long requestedAmount,
+        int maxDepth,
+        RecipeSelector recipeSelector,
+        String recipeLibrary
+    ) {
         if (target.key == null) {
             throw new IllegalArgumentException("Target ingredient has no stable JEI key.");
         }
 
         RecipeIndex index = RecipeIndex.create(scan);
         CalculationState state = new CalculationState();
-        SimpleTreeNode tree = buildNode(index, state, target, requestedAmount, 0, maxDepth, new LinkedHashSet<>(), recipeSelector);
+        boolean requireLibrarySelection = recipeLibrary != null;
+        SimpleTreeNode tree = buildNode(
+            index,
+            state,
+            target,
+            requestedAmount,
+            0,
+            maxDepth,
+            new LinkedHashSet<>(),
+            recipeSelector,
+            requireLibrarySelection
+        );
 
         SimpleTreeResult result = new SimpleTreeResult();
         result.generatedAt = Instant.now().toString();
@@ -56,7 +78,8 @@ public final class SimpleTreeCalculator {
         int depth,
         int maxDepth,
         Set<IngredientKey> path,
-        RecipeSelector recipeSelector
+        RecipeSelector recipeSelector,
+        boolean requireLibrarySelection
     ) {
         SimpleTreeNode node = new SimpleTreeNode();
         node.output = simpleItem(ingredient, requestedAmount);
@@ -75,7 +98,7 @@ public final class SimpleTreeCalculator {
             return rawNode(state, ingredient, requestedAmount);
         }
 
-        RecipeResolver.Resolution resolution = RecipeResolver.resolve(index, ingredient.key, recipeSelector);
+        RecipeResolver.Resolution resolution = RecipeResolver.resolve(index, ingredient.key, recipeSelector, requireLibrarySelection);
         if (!resolution.isSelected()) {
             return rawNode(state, ingredient, requestedAmount);
         }
@@ -115,12 +138,17 @@ public final class SimpleTreeCalculator {
         path.add(ingredient.key);
         Map<String, AmountedIngredient> groupedInputs = new LinkedHashMap<>();
         for (RecipeSlotData slot : recipe.inputSlots()) {
-            Optional<IngredientData> selected = slot.firstCraftableIngredient();
-            if (selected.isEmpty()) {
+            InputIngredientSelector.Selection selection = InputIngredientSelector.select(
+                index,
+                slot,
+                recipeSelector,
+                requireLibrarySelection
+            );
+            if (!selection.isSelected()) {
                 continue;
             }
 
-            IngredientData selectedIngredient = selected.get();
+            IngredientData selectedIngredient = selection.ingredient;
             long requiredAmount = TreeMath.safeMultiply(selectedIngredient.craftAmount(), crafts);
             String aggKey = aggregationKey(selectedIngredient);
             groupedInputs.compute(aggKey, (key, existing) -> {
@@ -145,7 +173,8 @@ public final class SimpleTreeCalculator {
                 depth + 1,
                 maxDepth,
                 path,
-                recipeSelector
+                recipeSelector,
+                requireLibrarySelection
             );
             if (groupedInput.tag != null && child.output != null) {
                 child.output.tag = groupedInput.tag;

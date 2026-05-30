@@ -236,7 +236,8 @@ public final class TmctClientCommands {
                 target,
                 requestedAmount,
                 maxDepth,
-                ingredientKey -> selectedRecipeFromLibrary(selectedLibrary, ingredientKey)
+                ingredientKey -> selectedRecipeFromLibrary(selectedLibrary, ingredientKey),
+                selectedLibrary
             );
 
             String targetName = target.identifier == null ? "target" : target.identifier;

@@ -38,7 +38,18 @@ public final class CraftingTreeCalculator {
 
         RecipeIndex index = RecipeIndex.create(scan);
         CalculationState state = new CalculationState();
-        CraftingTreeNode root = buildNode(index, state, target, requestedAmount, 0, maxDepth, new LinkedHashSet<>(), recipeSelector);
+        boolean requireLibrarySelection = recipeLibrary != null;
+        CraftingTreeNode root = buildNode(
+            index,
+            state,
+            target,
+            requestedAmount,
+            0,
+            maxDepth,
+            new LinkedHashSet<>(),
+            recipeSelector,
+            requireLibrarySelection
+        );
 
         CraftingTreeResult result = new CraftingTreeResult();
         result.generatedAt = Instant.now().toString();
@@ -63,7 +74,8 @@ public final class CraftingTreeCalculator {
         int depth,
         int maxDepth,
         Set<IngredientKey> path,
-        RecipeSelector recipeSelector
+        RecipeSelector recipeSelector,
+        boolean requireLibrarySelection
     ) {
         CraftingTreeNode node = new CraftingTreeNode();
         node.ingredient = ingredient.withAmount(requestedAmount);
@@ -89,7 +101,7 @@ public final class CraftingTreeCalculator {
             return node;
         }
 
-        RecipeResolver.Resolution resolution = RecipeResolver.resolve(index, ingredient.key, recipeSelector);
+        RecipeResolver.Resolution resolution = RecipeResolver.resolve(index, ingredient.key, recipeSelector, requireLibrarySelection);
         node.candidateRecipeCount = resolution.candidates.size();
         node.candidateRecipes = resolution.candidates.stream().map(RecipeData::selectorId).distinct().toList();
 
@@ -97,6 +109,15 @@ public final class CraftingTreeCalculator {
             case NO_CANDIDATES -> {
                 node.status = "base";
                 addAmount(state.baseMaterials, ingredient, requestedAmount);
+                return node;
+            }
+            case MISSING_LIBRARY_SELECTION -> {
+                node.status = "missing_library_selection";
+                state.unresolved.add(UnresolvedIngredient.of(
+                    ingredient,
+                    requestedAmount,
+                    "recipe library has no selected recipe for this ingredient"
+                ));
                 return node;
             }
             case MISSING_LIBRARY_RECIPE -> {
@@ -158,19 +179,29 @@ public final class CraftingTreeCalculator {
         path.add(ingredient.key);
         Map<IngredientKey, GroupedInput> groupedInputs = new LinkedHashMap<>();
         for (RecipeSlotData slot : recipe.inputSlots()) {
-            Optional<IngredientData> selected = slot.firstCraftableIngredient();
-            if (selected.isEmpty()) {
+            InputIngredientSelector.Selection selection = InputIngredientSelector.select(
+                index,
+                slot,
+                recipeSelector,
+                requireLibrarySelection
+            );
+            if (!selection.isSelected()) {
                 CraftingTreeInput input = new CraftingTreeInput();
                 input.slotName = slot.slotName;
                 input.tag = slot.tag;
                 input.alternatives = slot.ingredients;
-                input.status = "no_keyed_ingredient";
-                state.unresolved.add(UnresolvedIngredient.of(ingredient, requestedAmount, "input slot has no keyed ingredient"));
+                input.status = selection.status;
+                String reason = switch (selection.status) {
+                    case "missing_library_selection" -> "recipe library has no selected recipe for any candidate in this tagged input";
+                    case "no_keyed_ingredient" -> "input slot has no keyed ingredient";
+                    default -> "input slot could not be resolved";
+                };
+                state.unresolved.add(UnresolvedIngredient.of(ingredient, requestedAmount, reason));
                 node.inputs.add(input);
                 continue;
             }
 
-            IngredientData selectedIngredient = selected.get();
+            IngredientData selectedIngredient = selection.ingredient;
             long requiredAmount = TreeMath.safeMultiply(selectedIngredient.craftAmount(), crafts);
             GroupedInput groupedInput = groupedInputs.get(selectedIngredient.key);
             if (groupedInput == null) {
@@ -183,7 +214,17 @@ public final class CraftingTreeCalculator {
         }
         for (GroupedInput groupedInput : groupedInputs.values()) {
             CraftingTreeInput input = groupedInput.toInput();
-            input.child = buildNode(index, state, input.selected, input.requiredAmount, depth + 1, maxDepth, path, recipeSelector);
+            input.child = buildNode(
+                index,
+                state,
+                input.selected,
+                input.requiredAmount,
+                depth + 1,
+                maxDepth,
+                path,
+                recipeSelector,
+                requireLibrarySelection
+            );
             node.inputs.add(input);
         }
         path.remove(ingredient.key);

@@ -95,6 +95,7 @@
             "cycle",
             "depth_limit",
             "base",
+            "missing_library_selection",
             "missing_library_recipe",
             "ambiguous",
             "invalid_recipe_output",
@@ -186,6 +187,7 @@
           ],
           "enum": [
             "selected",
+            "missing_library_selection",
             "no_keyed_ingredient",
             null
           ]

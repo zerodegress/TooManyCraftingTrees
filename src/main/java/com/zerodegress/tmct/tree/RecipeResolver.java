@@ -13,6 +13,7 @@ public final class RecipeResolver {
     public enum Status {
         SELECTED,
         NO_CANDIDATES,
+        MISSING_LIBRARY_SELECTION,
         MISSING_LIBRARY_RECIPE,
         AMBIGUOUS
     }
@@ -37,7 +38,12 @@ public final class RecipeResolver {
         }
     }
 
-    public static Resolution resolve(RecipeIndex index, IngredientKey ingredientKey, RecipeSelector recipeSelector) {
+    public static Resolution resolve(
+        RecipeIndex index,
+        IngredientKey ingredientKey,
+        RecipeSelector recipeSelector,
+        boolean requireLibrarySelection
+    ) {
         List<RecipeData> candidates = index.candidatesFor(ingredientKey);
         String preferredRecipeId = recipeSelector.selectedRecipeId(ingredientKey).orElse(null);
 
@@ -53,6 +59,10 @@ public final class RecipeResolver {
                 return new Resolution(Status.MISSING_LIBRARY_RECIPE, null, null, candidates, preferredRecipeId);
             }
             return new Resolution(Status.SELECTED, selectedRecipe.get(), "library", candidates, preferredRecipeId);
+        }
+
+        if (requireLibrarySelection) {
+            return new Resolution(Status.MISSING_LIBRARY_SELECTION, null, null, candidates, null);
         }
 
         if (candidates.size() == 1) {

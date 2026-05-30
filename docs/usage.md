@@ -75,9 +75,10 @@ Arguments:
 Behavior:
 
 - If a target item has no crafting recipe candidates, the node is marked as `base`
-- If it has exactly one candidate recipe, that recipe is selected automatically
-- If it has multiple candidate recipes and no library selection, the node is marked as `ambiguous`
-- If a library is provided and contains a selected recipe for that item, the library selection is used
+- Without a library, if an item has exactly one candidate recipe, that recipe is selected automatically
+- Without a library, if an item has multiple candidate recipes and no library selection, the node is marked as `ambiguous`
+- If a library is provided, only recipes explicitly selected in that library are allowed to appear in the tree
+- If a library is provided and an ingredient has candidates but no selected recipe in that library, the node is marked as `missing_library_selection`
 
 Output:
 

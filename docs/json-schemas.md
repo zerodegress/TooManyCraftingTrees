@@ -206,6 +206,7 @@ Fields:
   - `crafted`: recipe selected and expanded
   - `base`: no recipe candidates
   - `ambiguous`: multiple candidates and no explicit library selection
+  - `missing_library_selection`: a library was required, but this ingredient has candidates and none was selected in the library
   - `missing_library_recipe`: library selected a composite selector id that is not present in current scan candidates
   - `invalid_recipe_output`: selected recipe did not expose matching output amount
   - `depth_limit`: recursion stopped at the configured limit
@@ -240,6 +241,7 @@ Fields:
 
 - `status`: input resolution result
   - `selected`: one ingredient alternative was selected
+  - `missing_library_selection`: this tagged input had keyed alternatives, but none had a selected recipe in the active library
   - `no_keyed_ingredient`: no stable keyed alternative was available
 - `slotName`: JEI slot name if available
 - `tag`: item tag id if the input slot was tag-based (e.g. `minecraft:planks`), or `null`
