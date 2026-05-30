@@ -167,6 +167,18 @@
             "null"
           ]
         },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tagSource": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "displayed": {
           "anyOf": [
             {
@@ -188,6 +200,8 @@
         "role",
         "slotName",
         "source",
+        "tag",
+        "tagSource",
         "displayed",
         "ingredients"
       ]

@@ -92,6 +92,8 @@ Fields:
 - `role`: JEI role, usually `INPUT`, `OUTPUT`, `CRAFTING_STATION`, or `RENDER_ONLY`
 - `slotName`: JEI-provided slot name if available
 - `source`: optional source tag; fallback-generated slots use `ingredient_supplier_fallback`
+- `tag`: item tag id if the slot's ingredients exactly match a tag (e.g. `minecraft:planks`), or `null`
+- `tagSource`: how the tag was resolved; `reverse_lookup` means matched by comparing the slot's ingredients against all item tags, or `null`
 - `displayed`: currently displayed ingredient in that slot, or `null`
 - `ingredients`: all possible ingredients for the slot
 
@@ -240,6 +242,7 @@ Fields:
   - `selected`: one ingredient alternative was selected
   - `no_keyed_ingredient`: no stable keyed alternative was available
 - `slotName`: JEI slot name if available
+- `tag`: item tag id if the input slot was tag-based (e.g. `minecraft:planks`), or `null`
 - `selected`: selected ingredient alternative, or `null`
 - `requiredAmount`: amount required for this input after multiplying by craft count
 - `alternatives`: all possible alternatives from the recipe slot
@@ -422,6 +425,7 @@ Fields:
 - `recipe` nodes contain `recipeId`, `recipeType`, `crafts`, `output`, `byproducts`, and `inputs`
 - `raw` nodes contain only `type` and `output`
 - `output`: requested output at this node
+- Each `simpleItem` in `output`, `byproducts`, or `inputs` may have a `tag` field: item tag id if the ingredient was tag-based (e.g. `minecraft:planks`), or `null`
 
 Notes:
 

@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -161,6 +162,7 @@ public final class CraftingTreeCalculator {
             if (selected.isEmpty()) {
                 CraftingTreeInput input = new CraftingTreeInput();
                 input.slotName = slot.slotName;
+                input.tag = slot.tag;
                 input.alternatives = slot.ingredients;
                 input.status = "no_keyed_ingredient";
                 state.unresolved.add(UnresolvedIngredient.of(ingredient, requestedAmount, "input slot has no keyed ingredient"));
@@ -172,10 +174,10 @@ public final class CraftingTreeCalculator {
             long requiredAmount = TreeMath.safeMultiply(selectedIngredient.craftAmount(), crafts);
             GroupedInput groupedInput = groupedInputs.get(selectedIngredient.key);
             if (groupedInput == null) {
-                groupedInput = GroupedInput.create(slot.slotName, selectedIngredient, slot.ingredients);
+                groupedInput = GroupedInput.create(slot.slotName, slot.tag, selectedIngredient, slot.ingredients);
                 groupedInputs.put(selectedIngredient.key, groupedInput);
             } else {
-                groupedInput.merge(slot.slotName, slot.ingredients);
+                groupedInput.merge(slot.slotName, slot.tag, slot.ingredients);
             }
             groupedInput.requiredAmount = TreeMath.safeAdd(groupedInput.requiredAmount, requiredAmount);
         }
@@ -266,6 +268,7 @@ public final class CraftingTreeCalculator {
     public static final class CraftingTreeInput {
         public String status;
         public String slotName;
+        public String tag;
         public IngredientData selected;
         public long requiredAmount;
         public List<IngredientData> alternatives = new ArrayList<>();
@@ -299,20 +302,24 @@ public final class CraftingTreeCalculator {
         private long requiredAmount;
         private int slotCount;
 
-        private static GroupedInput create(String slotName, IngredientData selected, List<IngredientData> alternatives) {
+        private static GroupedInput create(String slotName, String tag, IngredientData selected, List<IngredientData> alternatives) {
             GroupedInput grouped = new GroupedInput();
             grouped.input.status = "selected";
             grouped.input.slotName = slotName;
+            grouped.input.tag = tag;
             grouped.input.selected = selected;
             grouped.input.alternatives = List.copyOf(alternatives);
             grouped.slotCount = 1;
             return grouped;
         }
 
-        private void merge(String slotName, List<IngredientData> alternatives) {
+        private void merge(String slotName, String tag, List<IngredientData> alternatives) {
             slotCount++;
             if (slotCount > 1) {
                 input.slotName = null;
+                if (!Objects.equals(input.tag, tag)) {
+                    input.tag = null;
+                }
             } else if (input.slotName != null && !input.slotName.equals(slotName)) {
                 input.slotName = null;
             }

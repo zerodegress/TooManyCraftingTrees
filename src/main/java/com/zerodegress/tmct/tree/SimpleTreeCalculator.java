@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -121,10 +122,22 @@ public final class SimpleTreeCalculator {
 
             IngredientData selectedIngredient = selected.get();
             long requiredAmount = TreeMath.safeMultiply(selectedIngredient.craftAmount(), crafts);
-            addAmount(groupedInputs, selectedIngredient, requiredAmount);
+            String aggKey = aggregationKey(selectedIngredient);
+            groupedInputs.compute(aggKey, (key, existing) -> {
+                if (existing == null) {
+                    AmountedIngredient amounted = new AmountedIngredient(selectedIngredient);
+                    amounted.tag = slot.tag;
+                    return amounted;
+                }
+                existing.ingredient.amount = TreeMath.safeAdd(existing.ingredient.amount, requiredAmount);
+                if (!Objects.equals(existing.tag, slot.tag)) {
+                    existing.tag = null;
+                }
+                return existing;
+            });
         }
         for (AmountedIngredient groupedInput : groupedInputs.values()) {
-            node.inputs.add(buildNode(
+            SimpleTreeNode child = buildNode(
                 index,
                 state,
                 groupedInput.ingredient,
@@ -133,7 +146,11 @@ public final class SimpleTreeCalculator {
                 maxDepth,
                 path,
                 recipeSelector
-            ));
+            );
+            if (groupedInput.tag != null && child.output != null) {
+                child.output.tag = groupedInput.tag;
+            }
+            node.inputs.add(child);
         }
         path.remove(ingredient.key);
 
@@ -212,6 +229,7 @@ public final class SimpleTreeCalculator {
 
     private static final class AmountedIngredient {
         private final IngredientData ingredient;
+        private String tag;
 
         private AmountedIngredient(IngredientData ingredient) {
             this.ingredient = ingredient;
@@ -245,6 +263,7 @@ public final class SimpleTreeCalculator {
 
     public static final class SimpleItem {
         public String item;
+        public String tag;
         public long count;
     }
 }

@@ -196,6 +196,12 @@
             "null"
           ]
         },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "selected": {
           "anyOf": [
             {
@@ -230,6 +236,7 @@
       "required": [
         "status",
         "slotName",
+        "tag",
         "selected",
         "requiredAmount",
         "alternatives",

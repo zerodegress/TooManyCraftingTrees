@@ -42,6 +42,12 @@
             "null"
           ]
         },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "count": {
           "type": "integer",
           "minimum": 0
@@ -49,6 +55,7 @@
       },
       "required": [
         "item",
+        "tag",
         "count"
       ]
     },

@@ -33,11 +33,15 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public final class JeiRecipeScanner {
@@ -76,6 +80,7 @@ public final class JeiRecipeScanner {
 
         scan.recipeCount = scan.recipes.size();
         scan.recipeTypeCount = (int) scan.recipes.stream().map(recipe -> recipe.recipeType).distinct().count();
+        resolveAllSlotTags(scan);
         return scan;
     }
 
@@ -203,6 +208,44 @@ public final class JeiRecipeScanner {
         } catch (RuntimeException exception) {
             data.errors.add("Failed to read recipe layout slots: " + exception.getMessage());
             return List.of();
+        }
+    }
+
+    private static Map<Set<String>, String> buildTagLookup() {
+        Map<Set<String>, String> lookup = new HashMap<>();
+        BuiltInRegistries.ITEM.getTags().forEach(namedTag -> {
+            Set<String> itemIds = namedTag.stream()
+                .map(holder -> BuiltInRegistries.ITEM.getKey(holder.value()).toString())
+                .collect(Collectors.toCollection(TreeSet::new));
+            if (!itemIds.isEmpty()) {
+                lookup.put(itemIds, namedTag.key().location().toString());
+            }
+        });
+        return lookup;
+    }
+
+    private static void resolveAllSlotTags(RecipeScan scan) {
+        Map<Set<String>, String> tagLookup = buildTagLookup();
+        for (RecipeData recipe : scan.recipes) {
+            for (RecipeSlotData slot : recipe.slots) {
+                if (slot.ingredients.size() < 2) {
+                    continue;
+                }
+                Set<String> slotItemIds = new TreeSet<>();
+                for (IngredientData ingredient : slot.ingredients) {
+                    if (ingredient.item != null) {
+                        slotItemIds.add(ingredient.item);
+                    }
+                }
+                if (slotItemIds.size() < 2) {
+                    continue;
+                }
+                String tag = tagLookup.get(slotItemIds);
+                if (tag != null) {
+                    slot.tag = tag;
+                    slot.tagSource = "reverse_lookup";
+                }
+            }
         }
     }
 
@@ -496,6 +539,8 @@ public final class JeiRecipeScanner {
         public String role;
         public String slotName;
         public String source;
+        public String tag;
+        public String tagSource;
         public IngredientData displayed;
         public List<IngredientData> ingredients = new ArrayList<>();
 
