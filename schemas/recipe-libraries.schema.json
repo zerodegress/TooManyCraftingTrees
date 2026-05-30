@@ -13,6 +13,13 @@
       ],
       "format": "date-time"
     },
+    "activeLibrary": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
     "libraries": {
       "type": "object",
       "propertyNames": {
@@ -26,6 +33,7 @@
   },
   "required": [
     "updatedAt",
+    "activeLibrary",
     "libraries"
   ],
   "$defs": {

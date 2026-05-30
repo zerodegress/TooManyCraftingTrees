@@ -29,9 +29,6 @@ final class InputIngredientSelector {
                     return Selection.selected(ingredient);
                 }
             }
-            if (requireLibrarySelection) {
-                return Selection.missingLibrarySelection();
-            }
         }
 
         return Selection.selected(keyedIngredients.getFirst());

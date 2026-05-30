@@ -33,6 +33,19 @@ public final class RecipeLibraryStore {
         return DEFAULT_LIBRARY_NAME;
     }
 
+    public static String getActiveLibrary() throws IOException {
+        return loadFile().activeLibrary;
+    }
+
+    public static void setActiveLibrary(String libraryName) throws IOException {
+        RecipeLibraryFile file = loadFile();
+        if (!file.libraries.containsKey(libraryName)) {
+            throw new IllegalArgumentException("Recipe library does not exist: " + libraryName);
+        }
+        file.activeLibrary = libraryName;
+        saveFile(file);
+    }
+
     public static List<String> listLibraries() throws IOException {
         return List.copyOf(loadFile().libraries.keySet());
     }
@@ -55,6 +68,10 @@ public final class RecipeLibraryStore {
         if (file.libraries.remove(libraryName) == null) {
             throw new IllegalArgumentException("Recipe library does not exist: " + libraryName);
         }
+        if (libraryName.equals(file.activeLibrary)) {
+            file.activeLibrary = DEFAULT_LIBRARY_NAME;
+        }
+        file.libraries.computeIfAbsent(DEFAULT_LIBRARY_NAME, RecipeLibrary::new);
         saveFile(file);
     }
 
@@ -92,6 +109,7 @@ public final class RecipeLibraryStore {
         Path path = filePath();
         if (Files.notExists(path)) {
             RecipeLibraryFile file = new RecipeLibraryFile();
+            file.activeLibrary = DEFAULT_LIBRARY_NAME;
             file.libraries.put(DEFAULT_LIBRARY_NAME, new RecipeLibrary(DEFAULT_LIBRARY_NAME));
             saveFile(file);
             return file;
@@ -106,6 +124,9 @@ public final class RecipeLibraryStore {
                 file.libraries = new LinkedHashMap<>();
             }
             file.libraries.computeIfAbsent(DEFAULT_LIBRARY_NAME, RecipeLibrary::new);
+            if (file.activeLibrary == null || !file.libraries.containsKey(file.activeLibrary)) {
+                file.activeLibrary = DEFAULT_LIBRARY_NAME;
+            }
             return file;
         } catch (JsonParseException exception) {
             throw new IOException("Failed to parse recipe library file: " + path.toAbsolutePath(), exception);
@@ -133,6 +154,7 @@ public final class RecipeLibraryStore {
 
     private static final class RecipeLibraryFile {
         public String updatedAt;
+        public String activeLibrary;
         public Map<String, RecipeLibrary> libraries = new LinkedHashMap<>();
     }
 

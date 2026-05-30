@@ -13,6 +13,7 @@ public final class RecipeResolver {
     public enum Status {
         SELECTED,
         NO_CANDIDATES,
+        UNSELECTED_IN_LIBRARY,
         MISSING_LIBRARY_SELECTION,
         MISSING_LIBRARY_RECIPE,
         AMBIGUOUS
@@ -62,7 +63,7 @@ public final class RecipeResolver {
         }
 
         if (requireLibrarySelection) {
-            return new Resolution(Status.MISSING_LIBRARY_SELECTION, null, null, candidates, null);
+            return new Resolution(Status.UNSELECTED_IN_LIBRARY, null, null, candidates, null);
         }
 
         if (candidates.size() == 1) {

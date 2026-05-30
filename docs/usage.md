@@ -79,8 +79,9 @@ Behavior:
 - If a target item has no crafting recipe candidates, the node is marked as `base`
 - Without a library, if an item has exactly one candidate recipe, that recipe is selected automatically
 - Without a library, if an item has multiple candidate recipes and no library selection, the node is marked as `ambiguous`
-- If a library is provided, only recipes explicitly selected in that library are allowed to appear in the tree
-- If a library is provided and an ingredient has candidates but no selected recipe in that library, the node is marked as `missing_library_selection`
+- Without an explicit `library` argument, the current active recipe library is used
+- If a library is used, only recipes explicitly selected in that library are allowed to appear in the tree
+- If a library is used and an ingredient has candidates but no selected recipe in that library, the node is marked as `missing_library_selection`
 
 Output:
 
@@ -129,6 +130,10 @@ Arguments:
 - `maxDepth`: recursion depth limit, from `1` to `64`
 - `library`: a recipe library name created with `/tmct library create`
 
+Behavior:
+
+- Without an explicit `library` argument, the current active recipe library is used
+
 Output:
 
 - A JSON file named like `simple-tree-minecraft_chest-20260529-154000.json`
@@ -145,6 +150,8 @@ Examples:
 ### `/tmct library list`
 
 List all local recipe libraries.
+
+The active library is marked with `[active]`.
 
 Syntax:
 
@@ -222,8 +229,11 @@ Show the currently selected recipe in a library for an item.
 Syntax:
 
 ```text
+/tmct library show <item>
 /tmct library show <name> <item>
 ```
+
+When `<name>` is omitted, the active library is used.
 
 Example:
 
@@ -238,11 +248,13 @@ Bind one output item to one specific recipe in a named library.
 Syntax:
 
 ```text
+/tmct library set <item> <recipeId>
 /tmct library set <name> <item> <recipeId>
 ```
 
 Notes:
 
+- If `<name>` is omitted, the active library is used
 - `recipeId` must match one of the composite selector ids shown by `/tmct library candidates <item>`
 - The implementation validates that the selected recipe is actually a candidate for the item
 
@@ -259,7 +271,30 @@ Remove a recipe selection from a library for an item.
 Syntax:
 
 ```text
+/tmct library clear <item>
 /tmct library clear <name> <item>
+```
+
+When `<name>` is omitted, the active library is used.
+
+### `/tmct library active`
+
+Show the current active recipe library.
+
+Syntax:
+
+```text
+/tmct library active
+```
+
+### `/tmct library use`
+
+Switch the current active recipe library.
+
+Syntax:
+
+```text
+/tmct library use <name>
 ```
 
 Example:
@@ -290,9 +325,10 @@ This works best when every intermediate output has only one candidate recipe.
 
 ```text
 /tmct library create pack_a
+/tmct library use pack_a
 /tmct library candidates minecraft:stick
-/tmct library set pack_a minecraft:stick minecraft:stick
-/tmct tree minecraft:ladder 3 pack_a
+/tmct library set minecraft:stick minecraft:crafting | minecraft:stick
+/tmct tree minecraft:ladder 3
 ```
 
 This is the intended workflow when some items can be crafted in multiple ways.
@@ -301,9 +337,10 @@ This is the intended workflow when some items can be crafted in multiple ways.
 
 ```text
 /tmct library create pack_b
+/tmct library use pack_b
 /tmct library candidates minecraft:stick
-/tmct library set pack_b minecraft:stick minecraft:stick
-/tmct simpletree minecraft:ladder 3 pack_b
+/tmct library set minecraft:stick minecraft:crafting | minecraft:stick
+/tmct simpletree minecraft:ladder 3
 ```
 
 Use this when you want a smaller JSON shape than the full `/tmct tree` export.
@@ -314,3 +351,4 @@ Use this when you want a smaller JSON shape than the full `/tmct tree` export.
 - All commands are client-side. They do not require server support.
 - The crafting tree currently records byproducts, but does not feed byproducts back into later recipe resolution automatically.
 - A recipe library does not store the full recipe body. It stores selections from output item key to recipe id.
+- The recipe library file also stores one active library name used by commands that omit an explicit `library` argument.

@@ -153,7 +153,7 @@ public final class SimpleTreeCalculator {
             String aggKey = aggregationKey(selectedIngredient);
             groupedInputs.compute(aggKey, (key, existing) -> {
                 if (existing == null) {
-                    AmountedIngredient amounted = new AmountedIngredient(selectedIngredient);
+                    AmountedIngredient amounted = new AmountedIngredient(selectedIngredient.withAmount(requiredAmount));
                     amounted.tag = slot.tag;
                     return amounted;
                 }

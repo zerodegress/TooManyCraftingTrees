@@ -111,6 +111,11 @@ public final class CraftingTreeCalculator {
                 addAmount(state.baseMaterials, ingredient, requestedAmount);
                 return node;
             }
+            case UNSELECTED_IN_LIBRARY -> {
+                node.status = "base";
+                addAmount(state.baseMaterials, ingredient, requestedAmount);
+                return node;
+            }
             case MISSING_LIBRARY_SELECTION -> {
                 node.status = "missing_library_selection";
                 state.unresolved.add(UnresolvedIngredient.of(
@@ -348,7 +353,7 @@ public final class CraftingTreeCalculator {
             grouped.input.status = "selected";
             grouped.input.slotName = slotName;
             grouped.input.tag = tag;
-            grouped.input.selected = selected;
+            grouped.input.selected = selected.shallowCopy();
             grouped.input.alternatives = List.copyOf(alternatives);
             grouped.slotCount = 1;
             return grouped;

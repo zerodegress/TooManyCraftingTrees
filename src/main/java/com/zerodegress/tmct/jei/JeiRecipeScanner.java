@@ -8,6 +8,7 @@ import com.mojang.serialization.JsonOps;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
+import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.ingredients.IIngredientHelper;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
@@ -95,6 +96,34 @@ public final class JeiRecipeScanner {
             .createTypedIngredient(VanillaTypes.ITEM_STACK, normalizedStack, true)
             .orElseThrow(() -> new IllegalArgumentException("Item is not a valid JEI ingredient: " + stack));
         return describeTypedIngredient(registries, currentRuntime.getIngredientManager(), typedIngredient);
+    }
+
+    public static IngredientData describeTypedIngredient(HolderLookup.Provider registries, ITypedIngredient<?> typedIngredient) {
+        IJeiRuntime currentRuntime = runtime;
+        if (currentRuntime == null) {
+            throw new IllegalStateException("JEI runtime is not available yet. Join a world and wait for JEI to finish loading.");
+        }
+        return describeTypedIngredient(registries, currentRuntime.getIngredientManager(), typedIngredient);
+    }
+
+    public static <T> String recipeSelectorId(IRecipeCategory<T> category, T recipe) {
+        String recipeType = category.getRecipeType().getUid().toString();
+        Identifier identifier = safeValue(() -> category.getIdentifier(recipe));
+        String displayId = identifier == null ? recipeType + " / " + recipe.getClass().getName() : identifier.toString();
+        return recipeType + " | " + displayId;
+    }
+
+    public static List<IngredientData> selectedOutputIngredients(HolderLookup.Provider registries, IRecipeSlotsView recipeSlotsView) {
+        List<IngredientData> selectedOutputs = new ArrayList<>();
+        for (IRecipeSlotView slotView : recipeSlotsView.getSlotViews(RecipeIngredientRole.OUTPUT)) {
+            IngredientData selected = slotView.getDisplayedIngredient()
+                .map(typedIngredient -> describeTypedIngredient(registries, typedIngredient))
+                .orElse(null);
+            if (selected != null && selected.key != null) {
+                selectedOutputs.add(selected);
+            }
+        }
+        return List.copyOf(selectedOutputs);
     }
 
     private static <T> void scanType(
@@ -454,8 +483,14 @@ public final class JeiRecipeScanner {
         public String sortKey;
 
         public List<RecipeSlotData> inputSlots() {
-            return slots.stream()
+            List<RecipeSlotData> inputSlots = slots.stream()
                 .filter(slot -> RecipeIngredientRole.INPUT.name().equals(slot.role))
+                .toList();
+            if (!inputSlots.isEmpty()) {
+                return inputSlots;
+            }
+            return inputs.stream()
+                .map(ingredient -> fallbackSlot(RecipeIngredientRole.INPUT, ingredient))
                 .toList();
         }
 

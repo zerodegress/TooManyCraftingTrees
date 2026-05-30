@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -155,6 +156,30 @@ public final class TmctClientRecipeService {
             .stream()
             .sorted(Comparator.comparing(RecipeData::selectorId))
             .toList();
+    }
+
+    public List<IngredientData> collectRecipeOutputs(String recipeLibrary, RecipeData recipe) throws IOException {
+        return collectRecipeOutputs(
+            recipeLibrary,
+            recipe.selectorId(),
+            recipe.selectedOutputIngredients()
+        );
+    }
+
+    public List<IngredientData> collectRecipeOutputs(String recipeLibrary, String recipeSelectorId, List<IngredientData> outputs) throws IOException {
+        List<IngredientData> keyedOutputs = outputs.stream()
+            .filter(ingredient -> ingredient.key != null)
+            .toList();
+        if (keyedOutputs.isEmpty()) {
+            throw new IllegalArgumentException("Recipe has no stable JEI output keys.");
+        }
+
+        List<IngredientData> collected = new ArrayList<>();
+        for (IngredientData output : keyedOutputs) {
+            RecipeLibraryStore.setSelectedRecipe(recipeLibrary, output.key, recipeSelectorId);
+            collected.add(output);
+        }
+        return List.copyOf(collected);
     }
 
     private static CraftingTreeCalculator.CraftingTreeResult computeTree(

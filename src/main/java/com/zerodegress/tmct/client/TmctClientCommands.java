@@ -53,6 +53,11 @@ public final class TmctClientCommands {
         root.then(Commands.literal("library")
             .then(Commands.literal("list")
                 .executes(TmctClientCommands::listLibraries))
+            .then(Commands.literal("active")
+                .executes(TmctClientCommands::showActiveLibrary))
+            .then(Commands.literal("use")
+                .then(Commands.argument("name", StringArgumentType.word())
+                    .executes(TmctClientCommands::useActiveLibrary)))
             .then(Commands.literal("create")
                 .then(Commands.argument("name", StringArgumentType.word())
                     .executes(TmctClientCommands::createLibrary)))
@@ -60,15 +65,22 @@ public final class TmctClientCommands {
                 .then(Commands.argument("name", StringArgumentType.word())
                     .executes(TmctClientCommands::deleteLibrary)))
             .then(Commands.literal("show")
+                .then(Commands.argument("item", ItemArgument.item(event.getBuildContext()))
+                    .executes(TmctClientCommands::showActiveLibraryEntry))
                 .then(Commands.argument("name", StringArgumentType.word())
                     .then(Commands.argument("item", ItemArgument.item(event.getBuildContext()))
                         .executes(TmctClientCommands::showLibraryEntry))))
             .then(Commands.literal("set")
+                .then(Commands.argument("item", ItemArgument.item(event.getBuildContext()))
+                    .then(Commands.argument("recipeId", StringArgumentType.greedyString())
+                        .executes(TmctClientCommands::setActiveLibraryEntry)))
                 .then(Commands.argument("name", StringArgumentType.word())
                     .then(Commands.argument("item", ItemArgument.item(event.getBuildContext()))
                         .then(Commands.argument("recipeId", StringArgumentType.greedyString())
                             .executes(TmctClientCommands::setLibraryEntry)))))
             .then(Commands.literal("clear")
+                .then(Commands.argument("item", ItemArgument.item(event.getBuildContext()))
+                    .executes(TmctClientCommands::clearActiveLibraryEntry))
                 .then(Commands.argument("name", StringArgumentType.word())
                     .then(Commands.argument("item", ItemArgument.item(event.getBuildContext()))
                         .executes(TmctClientCommands::clearLibraryEntry))))
@@ -212,7 +224,7 @@ public final class TmctClientCommands {
             long requestedAmount = LongArgumentType.getLong(context, "count");
             ItemStack targetStack = itemInput.createItemStack(1);
 
-            String selectedLibrary = libraryName == null ? null : requireLibrary(source, libraryName);
+            String selectedLibrary = resolveLibrary(source, libraryName);
             TmctClientRecipeService.ExportedFile export = RECIPE_SERVICE.exportTree(
                 source.registryAccess(),
                 targetStack,
@@ -253,7 +265,7 @@ public final class TmctClientCommands {
             long requestedAmount = LongArgumentType.getLong(context, "count");
             ItemStack targetStack = itemInput.createItemStack(1);
 
-            String selectedLibrary = libraryName == null ? null : requireLibrary(source, libraryName);
+            String selectedLibrary = resolveLibrary(source, libraryName);
             TmctClientRecipeService.ExportedFile export = RECIPE_SERVICE.exportSimpleTree(
                 source.registryAccess(),
                 targetStack,
@@ -287,10 +299,39 @@ public final class TmctClientCommands {
         CommandSourceStack source = context.getSource();
         try {
             List<String> names = RecipeLibraryStore.listLibraries();
-            source.sendSuccess(() -> Component.literal("Recipe libraries: " + String.join(", ", names)), false);
+            String activeLibrary = RecipeLibraryStore.getActiveLibrary();
+            String message = names.stream()
+                .map(name -> name.equals(activeLibrary) ? name + " [active]" : name)
+                .reduce((left, right) -> left + ", " + right)
+                .orElse("");
+            source.sendSuccess(() -> Component.literal("Recipe libraries: " + message), false);
             return names.size();
         } catch (Exception exception) {
             return failCommand(source, "Failed to list recipe libraries", exception);
+        }
+    }
+
+    private static int showActiveLibrary(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        try {
+            String activeLibrary = RecipeLibraryStore.getActiveLibrary();
+            source.sendSuccess(() -> Component.literal("Active recipe library: " + activeLibrary), false);
+            return 1;
+        } catch (Exception exception) {
+            return failCommand(source, "Failed to show active recipe library", exception);
+        }
+    }
+
+    private static int useActiveLibrary(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        String libraryName = StringArgumentType.getString(context, "name");
+        try {
+            requireLibrary(source, libraryName);
+            RecipeLibraryStore.setActiveLibrary(libraryName);
+            source.sendSuccess(() -> Component.literal("Active recipe library set to " + libraryName), false);
+            return 1;
+        } catch (Exception exception) {
+            return failCommand(source, "Failed to set active recipe library", exception);
         }
     }
 
@@ -319,15 +360,22 @@ public final class TmctClientCommands {
     }
 
     private static int showLibraryEntry(CommandContext<CommandSourceStack> context) {
+        return showLibraryEntry(context, StringArgumentType.getString(context, "name"));
+    }
+
+    private static int showActiveLibraryEntry(CommandContext<CommandSourceStack> context) {
+        return showLibraryEntry(context, null);
+    }
+
+    private static int showLibraryEntry(CommandContext<CommandSourceStack> context, String libraryName) {
         CommandSourceStack source = context.getSource();
-        String libraryName = StringArgumentType.getString(context, "name");
         try {
             ItemStack stack = ItemArgument.getItem(context, "item").createItemStack(1);
             IngredientData ingredient = RECIPE_SERVICE.describeItemStack(source.registryAccess(), stack);
             if (ingredient.key == null) {
                 throw new IllegalArgumentException("Item has no stable JEI key.");
             }
-            String selectedLibrary = requireLibrary(source, libraryName);
+            String selectedLibrary = resolveLibrary(source, libraryName);
             Optional<String> selectedRecipe = RecipeLibraryStore.getSelectedRecipe(selectedLibrary, ingredient.key);
             String message = selectedRecipe
                 .map(recipeId -> "Library " + selectedLibrary + " selects " + recipeId + " for " + displayName(ingredient))
@@ -340,8 +388,15 @@ public final class TmctClientCommands {
     }
 
     private static int setLibraryEntry(CommandContext<CommandSourceStack> context) {
+        return setLibraryEntry(context, StringArgumentType.getString(context, "name"));
+    }
+
+    private static int setActiveLibraryEntry(CommandContext<CommandSourceStack> context) {
+        return setLibraryEntry(context, null);
+    }
+
+    private static int setLibraryEntry(CommandContext<CommandSourceStack> context, String libraryName) {
         CommandSourceStack source = context.getSource();
-        String libraryName = StringArgumentType.getString(context, "name");
         String recipeId = StringArgumentType.getString(context, "recipeId");
         try {
             ItemStack stack = ItemArgument.getItem(context, "item").createItemStack(1);
@@ -358,10 +413,11 @@ public final class TmctClientCommands {
                     "Recipe " + recipeId + " is not a candidate for " + displayName(ingredient)
                 ));
 
-            RecipeLibraryStore.setSelectedRecipe(libraryName, ingredient.key, selectedRecipe.selectorId());
+            String selectedLibrary = resolveLibrary(source, libraryName);
+            RecipeLibraryStore.setSelectedRecipe(selectedLibrary, ingredient.key, selectedRecipe.selectorId());
             source.sendSuccess(
                 () -> Component.literal(
-                    "Library " + libraryName + " selects " + selectedRecipe.selectorId() + " for " + displayName(ingredient)
+                    "Library " + selectedLibrary + " selects " + selectedRecipe.selectorId() + " for " + displayName(ingredient)
                 ),
                 false
             );
@@ -372,8 +428,15 @@ public final class TmctClientCommands {
     }
 
     private static int clearLibraryEntry(CommandContext<CommandSourceStack> context) {
+        return clearLibraryEntry(context, StringArgumentType.getString(context, "name"));
+    }
+
+    private static int clearActiveLibraryEntry(CommandContext<CommandSourceStack> context) {
+        return clearLibraryEntry(context, null);
+    }
+
+    private static int clearLibraryEntry(CommandContext<CommandSourceStack> context, String libraryName) {
         CommandSourceStack source = context.getSource();
-        String libraryName = StringArgumentType.getString(context, "name");
         try {
             ItemStack stack = ItemArgument.getItem(context, "item").createItemStack(1);
             IngredientData ingredient = RECIPE_SERVICE.describeItemStack(source.registryAccess(), stack);
@@ -417,6 +480,14 @@ public final class TmctClientCommands {
         } catch (Exception exception) {
             return failCommand(source, "Failed to list candidate recipes", exception);
         }
+    }
+
+    private static String resolveLibrary(CommandSourceStack source, String libraryName) throws IOException {
+        return libraryName == null ? activeLibrary(source) : requireLibrary(source, libraryName);
+    }
+
+    private static String activeLibrary(CommandSourceStack source) throws IOException {
+        return requireLibrary(source, RecipeLibraryStore.getActiveLibrary());
     }
 
     private static String requireLibrary(CommandSourceStack source, String libraryName) throws IOException {
