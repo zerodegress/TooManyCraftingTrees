@@ -1,3 +1,10 @@
 {
-  "modmenu.descriptionTranslation.too_many_crafting_trees": "Exports JEI recipes and calculates crafting trees."
+  "modmenu.descriptionTranslation.too_many_crafting_trees": "Exports JEI recipes and calculates crafting trees.",
+  "key.categories.tmct": "Too Many Crafting Trees",
+  "key.tmct.open_tree": "Open hovered ingredient tree",
+  "screen.tmct.tree.title": "Crafting Tree",
+  "screen.tmct.tree.active_library": "Active library: %s",
+  "screen.tmct.tree.no_recipe": "No crafting tree available.",
+  "screen.tmct.tree.controls": "Drag to pan. Scroll or use arrow keys to move.",
+  "screen.tmct.tree.raw": "raw"
 }

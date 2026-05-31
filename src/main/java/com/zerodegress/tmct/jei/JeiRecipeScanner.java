@@ -19,8 +19,10 @@ import mezz.jei.api.recipe.IRecipeManager;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.recipe.types.IRecipeType;
+import mezz.jei.api.runtime.IClickableIngredient;
 import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.api.runtime.IJeiRuntime;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -104,6 +106,55 @@ public final class JeiRecipeScanner {
             throw new IllegalStateException("JEI runtime is not available yet. Join a world and wait for JEI to finish loading.");
         }
         return describeTypedIngredient(registries, currentRuntime.getIngredientManager(), typedIngredient);
+    }
+
+    public static Optional<ITypedIngredient<?>> getHoveredIngredient() {
+        IJeiRuntime currentRuntime = runtime;
+        if (currentRuntime == null) {
+            return Optional.empty();
+        }
+
+        Optional<ITypedIngredient<?>> hovered = currentRuntime.getIngredientListOverlay().getIngredientUnderMouse()
+            .or(currentRuntime.getBookmarkOverlay()::getIngredientUnderMouse);
+        if (hovered.isPresent()) {
+            return hovered;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.screen == null) {
+            return Optional.empty();
+        }
+
+        double mouseX = minecraft.mouseHandler.xpos() * minecraft.getWindow().getGuiScaledWidth() / minecraft.getWindow().getScreenWidth();
+        double mouseY = minecraft.mouseHandler.ypos() * minecraft.getWindow().getGuiScaledHeight() / minecraft.getWindow().getScreenHeight();
+        return currentRuntime.getScreenHelper()
+            .getClickableIngredientUnderMouse(minecraft.screen, mouseX, mouseY)
+            .findFirst()
+            .map(clickableIngredient -> (ITypedIngredient<?>) clickableIngredient.getTypedIngredient());
+    }
+
+    public static List<IngredientData> findCraftingStations(HolderLookup.Provider registries, String recipeTypeUid, boolean includeHidden) {
+        IJeiRuntime currentRuntime = runtime;
+        if (currentRuntime == null) {
+            return List.of();
+        }
+
+        Identifier recipeTypeId = Identifier.tryParse(recipeTypeUid);
+        if (recipeTypeId == null) {
+            return List.of();
+        }
+
+        Optional<IRecipeType<?>> recipeType = currentRuntime.getRecipeManager().getRecipeType(recipeTypeId);
+        if (recipeType.isEmpty()) {
+            return List.of();
+        }
+
+        Stream<ITypedIngredient<?>> stations = includeHidden
+            ? currentRuntime.getRecipeManager().createCraftingStationLookup(recipeType.get()).includeHidden().get()
+            : currentRuntime.getRecipeManager().createCraftingStationLookup(recipeType.get()).get();
+        return stations
+            .map(typedIngredient -> describeTypedIngredient(registries, currentRuntime.getIngredientManager(), typedIngredient))
+            .toList();
     }
 
     public static <T> String recipeSelectorId(IRecipeCategory<T> category, T recipe) {

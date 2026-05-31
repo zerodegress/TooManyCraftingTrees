@@ -49,6 +49,10 @@ public final class TmctClientCommands {
 
         root.then(buildTreeCommand("tree", event, false));
         root.then(buildTreeCommand("simpletree", event, true));
+        root.then(Commands.literal("gui")
+            .then(Commands.argument("item", ItemArgument.item(event.getBuildContext()))
+                .then(Commands.argument("count", LongArgumentType.longArg(1))
+                    .executes(TmctClientCommands::openGui))));
 
         root.then(Commands.literal("library")
             .then(Commands.literal("list")
@@ -292,6 +296,29 @@ public final class TmctClientCommands {
             TooManyCraftingTrees.LOGGER.error("Failed to export simple tree", exception);
             source.sendFailure(Component.literal("Failed to export simple tree: " + exception.getMessage()));
             return 0;
+        }
+    }
+
+    private static int openGui(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        try {
+            ItemInput itemInput = ItemArgument.getItem(context, "item");
+            long requestedAmount = LongArgumentType.getLong(context, "count");
+            ItemStack targetStack = itemInput.createItemStack(1);
+            String selectedLibrary = activeLibrary(source);
+            TmctTreeOpenService.getInstance().openForItemStack(
+                source.registryAccess(),
+                targetStack,
+                requestedAmount,
+                selectedLibrary
+            );
+            source.sendSuccess(
+                () -> Component.literal("Opened TMCT tree GUI for " + targetStack.getDisplayName().getString() + " x" + requestedAmount),
+                false
+            );
+            return 1;
+        } catch (Exception exception) {
+            return failCommand(source, "Failed to open TMCT tree GUI", exception);
         }
     }
 

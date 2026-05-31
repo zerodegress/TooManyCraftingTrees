@@ -9,6 +9,7 @@ import com.zerodegress.tmct.jei.JeiRecipeScanner.RecipeData;
 import com.zerodegress.tmct.jei.JeiRecipeScanner.RecipeScan;
 import com.zerodegress.tmct.tree.CraftingTreeCalculator;
 import com.zerodegress.tmct.tree.SimpleTreeCalculator;
+import mezz.jei.api.ingredients.ITypedIngredient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.HolderLookup;
@@ -103,6 +104,42 @@ public final class TmctClientRecipeService {
         RecipeScan scan = getOrBuildScan(registries, includeHidden);
         IngredientData target = describeItemStack(registries, targetStack);
         return computeSimpleTree(scan, target, requestedAmount, maxDepth, recipeLibrary);
+    }
+
+    public SimpleTreeCalculator.SimpleTreeResult computeSimpleTree(
+        HolderLookup.Provider registries,
+        IngredientData target,
+        long requestedAmount,
+        boolean includeHidden,
+        int maxDepth,
+        String recipeLibrary
+    ) {
+        RecipeScan scan = getOrBuildScan(registries, includeHidden);
+        return computeSimpleTree(scan, target, requestedAmount, maxDepth, recipeLibrary);
+    }
+
+    public IngredientData describeTypedIngredient(HolderLookup.Provider registries, mezz.jei.api.ingredients.ITypedIngredient<?> typedIngredient) {
+        return JeiRecipeScanner.describeTypedIngredient(registries, typedIngredient);
+    }
+
+    public List<IngredientData> findCraftingStations(HolderLookup.Provider registries, String recipeTypeUid, boolean includeHidden) {
+        return JeiRecipeScanner.findCraftingStations(registries, recipeTypeUid, includeHidden);
+    }
+
+    public Optional<ITypedIngredient<?>> getHoveredIngredient() {
+        return JeiRecipeScanner.getHoveredIngredient();
+    }
+
+    public Optional<RecipeData> findRecipeByDisplayId(
+        HolderLookup.Provider registries,
+        String recipeType,
+        String recipeId,
+        boolean includeHidden
+    ) {
+        return getOrBuildScan(registries, includeHidden).recipes.stream()
+            .filter(recipe -> recipeType.equals(recipe.recipeType))
+            .filter(recipe -> recipeId.equals(recipe.displayId()))
+            .findFirst();
     }
 
     public ExportedFile exportTree(
