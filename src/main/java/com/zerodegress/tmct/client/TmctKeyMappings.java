@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.zerodegress.tmct.TooManyCraftingTrees;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
+import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 
 public final class TmctKeyMappings {
@@ -12,6 +13,8 @@ public final class TmctKeyMappings {
     );
     public static final KeyMapping OPEN_TREE = new KeyMapping(
         "key.tmct.open_tree",
+        KeyConflictContext.GUI,
+        InputConstants.Type.KEYSYM,
         InputConstants.KEY_Y,
         CATEGORY
     );

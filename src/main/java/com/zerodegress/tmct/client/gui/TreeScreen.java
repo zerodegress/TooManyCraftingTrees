@@ -40,7 +40,7 @@ public final class TreeScreen extends Screen {
     private static final int COUNT_TEXT_COLOR = 0xFFFFFFFF;
     private static final int TOGGLE_FILL = 0xE0101010;
     private static final int TOGGLE_BORDER = 0xFFF0F0F0;
-    private static final int TOGGLE_SIZE = 10;
+    private static final int TOGGLE_SIZE = 9;
     private static final int TOGGLE_TEXT_COLOR = 0xFFFFFFFF;
 
     private static final int PANEL_X = 12;
@@ -53,7 +53,7 @@ public final class TreeScreen extends Screen {
     private static final int CONTENT_PADDING_BOTTOM = 24;
 
     private static final int ITEM_SLOT_SIZE = 18;
-    private static final int ITEM_TEXT_Y = 22;
+    private static final int ITEM_TEXT_Y = 21;
     private static final int NODE_BOX_HALF_WIDTH = 26;
     private static final int NODE_BOX_HEIGHT = 34;
     private static final int RECIPE_BADGE_GAP = 8;
@@ -61,8 +61,10 @@ public final class TreeScreen extends Screen {
     private static final int RECIPE_TEXT_HEIGHT = 10;
     private static final int RECIPE_SIDE_GAP = 10;
     private static final int LAYER_HEIGHT = 96;
-    private static final int MIN_SUBTREE_WIDTH = 56;
-    private static final int SIBLING_GAP = 12;
+    // 最小子树宽度
+    private static final int MIN_SUBTREE_WIDTH = 32;
+    // 叶子节点间距
+    private static final int SIBLING_GAP = 6;
     private static final int PAN_STEP = 24;
     private static final float MIN_ZOOM = 0.6F;
     private static final float MAX_ZOOM = 2.25F;
@@ -334,17 +336,13 @@ public final class TreeScreen extends Screen {
         if (!node.children.isEmpty() && this.isExpanded(node)) {
             int parentBottom = node.top + NODE_BOX_HEIGHT;
             int branchY = node.top + LAYER_HEIGHT - 14;
-            int connectorStartY = parentBottom;
 
             if (node.recipeInfo.hasDisplay()) {
-                int badgeTop = parentBottom + RECIPE_BADGE_GAP;
-                int badgeBottom = badgeTop + node.recipeInfo.badgeHeight();
-                this.drawVertical(graphics, node.centerX, parentBottom, badgeBottom + 4);
+                int badgeTop = this.recipeBadgeTop(node, parentBottom, branchY);
                 this.renderRecipeBadge(graphics, node, badgeTop);
-                connectorStartY = badgeBottom + 4;
             }
 
-            this.drawVertical(graphics, node.centerX, connectorStartY, branchY);
+            this.drawVertical(graphics, node.centerX, parentBottom, branchY);
 
             int minChildX = node.children.getFirst().centerX;
             int maxChildX = node.children.getLast().centerX;
@@ -392,13 +390,13 @@ public final class TreeScreen extends Screen {
     private void renderCountLabel(GuiGraphicsExtractor graphics, LayoutNode node) {
         String text = "x" + (node.node.output == null ? 0L : node.node.output.count);
         int textWidth = this.font.width(text);
-        int labelWidth = textWidth + 8;
+        int labelWidth = textWidth + 6;
         int left = node.centerX - labelWidth / 2;
         int top = node.top + ITEM_TEXT_Y - 1;
-        int labelHeight = 12;
+        int labelHeight = 10;
         graphics.fill(left, top, left + labelWidth, top + labelHeight, COUNT_FILL);
         graphics.outline(left, top, labelWidth, labelHeight, COUNT_BORDER);
-        graphics.text(this.font, text, left + 4, top + 2, COUNT_TEXT_COLOR, false);
+        graphics.text(this.font, text, left + 3, top + 1, COUNT_TEXT_COLOR, false);
     }
 
     private void renderNodeTooltip(GuiGraphicsExtractor graphics, LayoutNode node, int mouseX, int mouseY) {
@@ -476,13 +474,27 @@ public final class TreeScreen extends Screen {
         graphics.fill(left, top, left + TOGGLE_SIZE, top + TOGGLE_SIZE, TOGGLE_FILL);
         graphics.outline(left, top, TOGGLE_SIZE, TOGGLE_SIZE, TOGGLE_BORDER);
         String label = this.isExpanded(node) ? "-" : "+";
-        graphics.text(this.font, label, left + 3, top + 1, TOGGLE_TEXT_COLOR, false);
+        int textX = left + (TOGGLE_SIZE - this.font.width(label)) / 2;
+        int textY = top;
+        if ("+".equals(label)) {
+            textX += 1;
+            textY += 1;
+        } else {
+            textX += 1;
+            textY += 1;
+        }
+        graphics.text(this.font, label, textX, textY, TOGGLE_TEXT_COLOR, false);
     }
 
     private int recipeBadgeLeft(LayoutNode node) {
-        int badgeWidth = node.recipeInfo.badgeWidth(this.font);
-        boolean placeLeft = node.centerX > this.treeWidth / 2;
-        return placeLeft ? node.centerX - RECIPE_SIDE_GAP - badgeWidth : node.centerX + RECIPE_SIDE_GAP;
+        return node.centerX + RECIPE_SIDE_GAP;
+    }
+
+    private int recipeBadgeTop(LayoutNode node, int parentBottom, int branchY) {
+        int availableHeight = branchY - parentBottom;
+        int badgeHeight = node.recipeInfo.badgeHeight();
+        int centeredOffset = Math.max(RECIPE_BADGE_GAP, (availableHeight - badgeHeight) / 2);
+        return parentBottom + centeredOffset;
     }
 
     private void drawVertical(GuiGraphicsExtractor graphics, int x, int y0, int y1) {
@@ -510,7 +522,7 @@ public final class TreeScreen extends Screen {
         if (!node.recipeInfo.hasDisplay() || node.children.isEmpty()) {
             return false;
         }
-        int top = node.top + NODE_BOX_HEIGHT + RECIPE_BADGE_GAP;
+        int top = this.recipeBadgeTop(node, node.top + NODE_BOX_HEIGHT, node.top + LAYER_HEIGHT - 14);
         int left = this.recipeBadgeLeft(node);
         int right = left + node.recipeInfo.badgeWidth(this.font);
         return mouseX >= left && mouseX <= right && mouseY >= top && mouseY <= top + node.recipeInfo.badgeHeight();
@@ -606,13 +618,12 @@ public final class TreeScreen extends Screen {
     }
 
     private int toggleLeft(LayoutNode node) {
-        int text = this.font.width("x" + (node.node.output == null ? 0L : node.node.output.count));
-        int labelWidth = text + 8;
-        return node.centerX + labelWidth / 2 + 4;
+        int slotRight = node.centerX - ITEM_SLOT_SIZE / 2 + ITEM_SLOT_SIZE;
+        return slotRight + 2;
     }
 
     private int toggleTop(LayoutNode node) {
-        return node.top + ITEM_TEXT_Y;
+        return node.top + 4;
     }
 
     private RecipeInfo resolveRecipeInfo(SimpleTreeCalculator.SimpleTreeNode node) {

@@ -12,6 +12,6 @@ public final class TmctClientBootstrap {
     public TmctClientBootstrap(IEventBus modEventBus, ModContainer modContainer) {
         TooManyCraftingTrees.LOGGER.info("Initializing TMCT client bootstrap");
         modEventBus.addListener(TmctKeyMappings::register);
-        NeoForge.EVENT_BUS.addListener(TmctTreeKeyEvents::onClientTick);
+        NeoForge.EVENT_BUS.addListener(TmctTreeKeyEvents::onScreenKeyPressed);
     }
 }
