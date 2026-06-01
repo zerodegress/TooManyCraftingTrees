@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public final class TmctJeiRecipeLibraryButtonFactory implements IRecipeButtonControllerFactory {
+    private static final float ICON_SCALE = 0.75F;
     private final IDrawable icon;
 
     public TmctJeiRecipeLibraryButtonFactory(IDrawable icon) {
@@ -36,7 +37,7 @@ public final class TmctJeiRecipeLibraryButtonFactory implements IRecipeButtonCon
         IDrawable icon = TmctJeiPlugin.getJeiHelpers()
             .getGuiHelper()
             .createDrawableItemLike(Items.WRITABLE_BOOK);
-        return new TmctJeiRecipeLibraryButtonFactory(icon);
+        return new TmctJeiRecipeLibraryButtonFactory(new ScaledDrawable(icon, ICON_SCALE));
     }
 
     private static final class RecipeLibraryButtonController<T> implements IIconButtonController {
@@ -54,7 +55,17 @@ public final class TmctJeiRecipeLibraryButtonFactory implements IRecipeButtonCon
         }
 
         @Override
+        public void updateState(IButtonState state) {
+            state.setIcon(icon);
+            state.setForcePressed(this.isCurrentlySelected());
+        }
+
+        @Override
         public boolean onPress(IJeiUserInput input) {
+            if (input.isSimulate()) {
+                return true;
+            }
+
             Minecraft minecraft = Minecraft.getInstance();
             if (minecraft.level == null || minecraft.player == null) {
                 return true;
@@ -71,13 +82,22 @@ public final class TmctJeiRecipeLibraryButtonFactory implements IRecipeButtonCon
                     registries,
                     recipeLayoutDrawable.getRecipeSlotsView()
                 );
-                List<IngredientData> collected = TmctClientRecipeService.getInstance()
-                    .collectRecipeOutputs(activeLibrary, selectorId, outputs);
-                minecraft.player.sendSystemMessage(
-                    Component.literal(
-                        "Collected recipe " + selectorId + " into library " + activeLibrary + " for " + displayOutputs(collected)
-                    )
-                );
+                TmctClientRecipeService recipeService = TmctClientRecipeService.getInstance();
+                if (recipeService.isRecipeSelected(activeLibrary, selectorId, outputs)) {
+                    List<IngredientData> cleared = recipeService.clearRecipeOutputs(activeLibrary, outputs);
+                    minecraft.player.sendSystemMessage(
+                        Component.literal(
+                            "Removed recipe " + selectorId + " from library " + activeLibrary + " for " + displayOutputs(cleared)
+                        )
+                    );
+                } else {
+                    List<IngredientData> collected = recipeService.collectRecipeOutputs(activeLibrary, selectorId, outputs);
+                    minecraft.player.sendSystemMessage(
+                        Component.literal(
+                            "Collected recipe " + selectorId + " into library " + activeLibrary + " for " + displayOutputs(collected)
+                        )
+                    );
+                }
             } catch (Exception exception) {
                 TooManyCraftingTrees.LOGGER.error("Failed to collect JEI recipe into library", exception);
                 minecraft.player.sendSystemMessage(Component.literal("Failed to collect recipe into library: " + exception.getMessage()));
@@ -88,10 +108,32 @@ public final class TmctJeiRecipeLibraryButtonFactory implements IRecipeButtonCon
         @Override
         public void getTooltips(ITooltipBuilder tooltip) {
             try {
-                tooltip.add(Component.literal("Collect recipe into active library"));
-                tooltip.add(Component.literal("Active library: " + RecipeLibraryStore.getActiveLibrary()));
+                String activeLibrary = RecipeLibraryStore.getActiveLibrary();
+                tooltip.add(Component.literal(this.isCurrentlySelected() ? "Remove recipe from active library" : "Collect recipe into active library"));
+                tooltip.add(Component.literal("Active library: " + activeLibrary));
             } catch (IOException exception) {
                 tooltip.add(Component.literal("Active library unavailable"));
+            }
+        }
+
+        private boolean isCurrentlySelected() {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.level == null) {
+                return false;
+            }
+            try {
+                String activeLibrary = RecipeLibraryStore.getActiveLibrary();
+                String selectorId = JeiRecipeScanner.recipeSelectorId(
+                    recipeLayoutDrawable.getRecipeCategory(),
+                    recipeLayoutDrawable.getRecipe()
+                );
+                List<IngredientData> outputs = JeiRecipeScanner.selectedOutputIngredients(
+                    minecraft.level.registryAccess(),
+                    recipeLayoutDrawable.getRecipeSlotsView()
+                );
+                return TmctClientRecipeService.getInstance().isRecipeSelected(activeLibrary, selectorId, outputs);
+            } catch (Exception exception) {
+                return false;
             }
         }
 
@@ -100,6 +142,32 @@ public final class TmctJeiRecipeLibraryButtonFactory implements IRecipeButtonCon
                 .map(ingredient -> ingredient.displayName != null ? ingredient.displayName : ingredient.identifier)
                 .distinct()
                 .collect(Collectors.joining(", "));
+        }
+    }
+
+    private record ScaledDrawable(IDrawable delegate, float scale) implements IDrawable {
+        @Override
+        public int getWidth() {
+            return delegate.getWidth();
+        }
+
+        @Override
+        public int getHeight() {
+            return delegate.getHeight();
+        }
+
+        @Override
+        public void draw(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int xOffset, int yOffset) {
+            int scaledWidth = Math.round(delegate.getWidth() * scale);
+            int scaledHeight = Math.round(delegate.getHeight() * scale);
+            float insetX = (delegate.getWidth() - scaledWidth) / 2.0F;
+            float insetY = (delegate.getHeight() - scaledHeight) / 2.0F;
+
+            guiGraphics.pose().pushMatrix();
+            guiGraphics.pose().translate(xOffset + insetX, yOffset + insetY);
+            guiGraphics.pose().scale(scale, scale);
+            delegate.draw(guiGraphics, 0, 0);
+            guiGraphics.pose().popMatrix();
         }
     }
 }

@@ -219,6 +219,40 @@ public final class TmctClientRecipeService {
         return List.copyOf(collected);
     }
 
+    public List<IngredientData> clearRecipeOutputs(String recipeLibrary, List<IngredientData> outputs) throws IOException {
+        List<IngredientData> keyedOutputs = outputs.stream()
+            .filter(ingredient -> ingredient.key != null)
+            .toList();
+        if (keyedOutputs.isEmpty()) {
+            throw new IllegalArgumentException("Recipe has no stable JEI output keys.");
+        }
+
+        List<IngredientData> cleared = new ArrayList<>();
+        for (IngredientData output : keyedOutputs) {
+            if (RecipeLibraryStore.clearSelectedRecipe(recipeLibrary, output.key)) {
+                cleared.add(output);
+            }
+        }
+        return List.copyOf(cleared);
+    }
+
+    public boolean isRecipeSelected(String recipeLibrary, String recipeSelectorId, List<IngredientData> outputs) throws IOException {
+        List<IngredientData> keyedOutputs = outputs.stream()
+            .filter(ingredient -> ingredient.key != null)
+            .toList();
+        if (keyedOutputs.isEmpty()) {
+            return false;
+        }
+
+        for (IngredientData output : keyedOutputs) {
+            Optional<String> selected = RecipeLibraryStore.getSelectedRecipe(recipeLibrary, output.key);
+            if (selected.isEmpty() || !recipeSelectorId.equals(selected.get())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static CraftingTreeCalculator.CraftingTreeResult computeTree(
         RecipeScan scan,
         IngredientData target,
